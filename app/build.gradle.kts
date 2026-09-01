@@ -16,4 +16,6 @@ dependencies {
     implementation(project(":feature:main:details")); implementation(project(":feature:main:configuration"))
     implementation(project(":feature:setup")); implementation(project(":feature:crash"))
     implementation(libs.androidx.core.splashscreen); implementation(libs.libsu.core); implementation(libs.libsu.service)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 }
