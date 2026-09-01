@@ -180,7 +180,7 @@ object RootUtil {
         executeCommand("am force-stop $packageName", useRoot = true)
     }
 
-    fun executeCommand(command: String, useRoot: Boolean = true): CommandResult {
+    fun executeCommand(command: String, useRoot: Boolean = true, timeoutSeconds: Long = 45): CommandResult {
         val outLines = mutableListOf<String>()
         return try {
             val process = if (useRoot) {
@@ -199,14 +199,31 @@ object RootUtil {
                 ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start()
             }
 
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    line?.let { outLines.add(it) }
-                }
+            val readerThread = Thread {
+                try {
+                    BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            line?.let { outLines.add(it) }
+                        }
+                    }
+                } catch (ignored: Exception) {}
             }
+            readerThread.start()
 
-            val exitCode = process.waitFor()
+            val finished = process.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                readerThread.interrupt()
+                return CommandResult(
+                    isSuccess = false,
+                    out = listOf("Command timed out after ${timeoutSeconds}s: $command"),
+                    code = -1
+                )
+            }
+            readerThread.join(2000)
+
+            val exitCode = process.exitValue()
             CommandResult(
                 isSuccess = exitCode == 0 || exitCode == 1,
                 out = outLines,

@@ -392,6 +392,7 @@ class BackupRestoreEngine @Inject constructor(
             val isRoot = RootUtil.isRootAvailable()
 
             if (isRoot) {
+                try { RootUtil.forceStopApp(packageName) } catch (e: Exception) { e.printStackTrace() }
                 RootUtil.executeCommand("mkdir -p '${appDir.absolutePath}'", useRoot = true)
             } else {
                 appDir.mkdirs()
@@ -435,17 +436,9 @@ class BackupRestoreEngine @Inject constructor(
                 val dataPath = appInfo.dataDir ?: "/data/user/0/$packageName"
                 val destArchive = File(appDir, "data.tar.gz")
                 if (isRoot) {
+                    val d = "$"
                     val tmpStage = "/data/local/tmp/mbackup_stage_$packageName"
-                    val cmd = """
-                        rm -rf '$tmpStage'
-                        mkdir -p '$tmpStage'
-                        (cp -a '$dataPath/.' '$tmpStage/' 2>/dev/null || cp -a '/data/data/$packageName/.' '$tmpStage/' 2>/dev/null || cp -a '/data/user/0/$packageName/.' '$tmpStage/' 2>/dev/null)
-                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache'
-                        (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || (tar -cf - . | gzip > '$tmpStage.tar.gz') 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null))
-                        cp -f '$tmpStage.tar.gz' '${destArchive.absolutePath}'
-                        chmod 644 '${destArchive.absolutePath}'
-                        rm -rf '$tmpStage' '$tmpStage.tar.gz'
-                    """.trimIndent().replace("\n", " ; ")
+                    val cmd = "rm -rf '$tmpStage' ; mkdir -p '$tmpStage' ; (find '$dataPath' -mindepth 1 ! -type s ! -type p ! -name lib ! -name cache ! -name code_cache -exec cp -r {} '$tmpStage/' \\; 2>/dev/null || cp -r '$dataPath/.' '$tmpStage/' 2>/dev/null) ; rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache' ; if [ -n \"${d}(ls -A '$tmpStage' 2>/dev/null)\" ]; then (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || (tar -cf - . | gzip > '$tmpStage.tar.gz') 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null)) ; cp -f '$tmpStage.tar.gz' '${destArchive.absolutePath}' ; chmod 644 '${destArchive.absolutePath}' ; fi ; rm -rf '$tmpStage' '$tmpStage.tar.gz'"
                     RootUtil.executeCommand(cmd, useRoot = true)
                 } else {
                     val extData = File(Environment.getExternalStorageDirectory(), "Android/data/$packageName")
@@ -462,18 +455,8 @@ class BackupRestoreEngine @Inject constructor(
                 val dePath = "/data/user_de/0/$packageName"
                 val destDeArchive = File(appDir, "data_de.tar.gz")
                 val tmpStage = "/data/local/tmp/mbackup_de_$packageName"
-                val cmd = """
-                    if [ -d '$dePath' ]; then
-                        rm -rf '$tmpStage'
-                        mkdir -p '$tmpStage'
-                        cp -a '$dePath/.' '$tmpStage/' 2>/dev/null
-                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache'
-                        (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null))
-                        cp -f '$tmpStage.tar.gz' '${destDeArchive.absolutePath}'
-                        chmod 644 '${destDeArchive.absolutePath}'
-                        rm -rf '$tmpStage' '$tmpStage.tar.gz'
-                    fi
-                """.trimIndent().replace("\n", " ; ")
+                val d = "$"
+                val cmd = "if [ -d '$dePath' ]; then rm -rf '$tmpStage' ; mkdir -p '$tmpStage' ; (find '$dePath' -mindepth 1 ! -type s ! -type p ! -name lib ! -name cache ! -name code_cache -exec cp -r {} '$tmpStage/' \\; 2>/dev/null || cp -r '$dePath/.' '$tmpStage/' 2>/dev/null) ; rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache' ; if [ -n \"${d}(ls -A '$tmpStage' 2>/dev/null)\" ]; then (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null)) ; cp -f '$tmpStage.tar.gz' '${destDeArchive.absolutePath}' ; chmod 644 '${destDeArchive.absolutePath}' ; fi ; rm -rf '$tmpStage' '$tmpStage.tar.gz' ; fi"
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
 
