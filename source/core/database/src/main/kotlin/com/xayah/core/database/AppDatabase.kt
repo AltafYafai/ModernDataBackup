@@ -9,7 +9,7 @@ import com.xayah.core.database.entity.AppEntity
 import com.xayah.core.database.entity.FileEntity
 import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.database.util.Converters
-@Database(entities = [TaskEntity::class, AppEntity::class, FileEntity::class], version = 1, exportSchema = false)
+@Database(entities = [TaskEntity::class, AppEntity::class, FileEntity::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao

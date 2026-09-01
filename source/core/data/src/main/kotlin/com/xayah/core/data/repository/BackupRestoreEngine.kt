@@ -537,6 +537,10 @@ class BackupRestoreEngine @Inject constructor(
         customBackupPath: String = ""
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            if (packageName.isBlank() || packageName == context.packageName) {
+                return@withContext Result.failure(Exception("Cannot restore active running application ($packageName)"))
+            }
+
             val pathStr = if (customBackupPath.isNotBlank()) customBackupPath else PathUtil.DEFAULT_BACKUP_PATH
             val baseDir = File(pathStr)
             val appDir = File(baseDir, packageName)
@@ -550,7 +554,11 @@ class BackupRestoreEngine @Inject constructor(
             }
 
             if (isRoot) {
-                RootUtil.forceStopApp(packageName)
+                try {
+                    RootUtil.forceStopApp(packageName)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
 
             // 1. Restore APK (Multi-Split / Base)

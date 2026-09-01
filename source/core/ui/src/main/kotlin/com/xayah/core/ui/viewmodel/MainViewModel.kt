@@ -223,80 +223,13 @@ class MainViewModel @Inject constructor(
 
     fun restoreSingle(context: Context, packageName: String, label: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            _currentOperation.value = "Restoring $label (APK + Data + Media + Logins)..."
-            _operationProgress.value = 0.3f
-            val res = backupRestoreEngine.restoreApp(
-                context = context,
-                packageName = packageName,
-                label = label,
-                restoreApk = _settings.value.includeApk,
-                restoreData = _settings.value.includeData,
-                restoreDeData = _settings.value.includeDeData,
-                restoreExtData = _settings.value.includeExtData,
-                restoreMedia = _settings.value.includeMedia,
-                restoreObb = _settings.value.includeObb,
-                restorePermissions = _settings.value.includePermissions,
-                restoreSsaid = _settings.value.includeSsaid,
-                customBackupPath = _settings.value.backupPath
-            )
-            _operationProgress.value = 1f
-            _currentOperation.value = null
-            if (res.isSuccess) {
-                _snackbarMessage.value = "Restored successfully: $label"
-            } else {
-                _snackbarMessage.value = "Restore failed: ${res.exceptionOrNull()?.message}"
-            }
-            loadHistory()
-            scanInstalledApps(context)
-        }
-    }
-
-    fun backupBatch(context: Context, apps: List<AppEntity>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (apps.isEmpty()) return@launch
-            var successCount = 0
-            val total = apps.size
-            apps.forEachIndexed { index, app ->
-                _currentOperation.value = "Backing up (${index + 1}/$total): ${app.label}"
-                _operationProgress.value = (index.toFloat() / total.toFloat())
-                val res = backupRestoreEngine.backupApp(
-                    context = context,
-                    packageName = app.packageName,
-                    label = app.label,
-                    includeApk = _settings.value.includeApk,
-                    includeData = _settings.value.includeData,
-                    includeDeData = _settings.value.includeDeData,
-                    includeExtData = _settings.value.includeExtData,
-                    includeMedia = _settings.value.includeMedia,
-                    includeObb = _settings.value.includeObb,
-                    includePermissions = _settings.value.includePermissions,
-                    includeSsaid = _settings.value.includeSsaid,
-                    customBackupPath = _settings.value.backupPath
-                )
-                if (res.isSuccess) successCount++
-            }
-            _currentOperation.value = null
-            _operationProgress.value = 0f
-            _snackbarMessage.value = "Batch backup complete: $successCount of $total apps backed up"
-            scanInstalledApps(context)
-            loadAvailableBackups(context)
-            loadHistory()
-            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, _settings.value.backupPath)
-        }
-    }
-
-    fun restoreBatch(context: Context, backups: List<BackupManifest>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (backups.isEmpty()) return@launch
-            var successCount = 0
-            val total = backups.size
-            backups.forEachIndexed { index, backup ->
-                _currentOperation.value = "Restoring (${index + 1}/$total): ${backup.label}"
-                _operationProgress.value = (index.toFloat() / total.toFloat())
+            try {
+                _currentOperation.value = "Restoring $label (APK + Data + Media + Logins)..."
+                _operationProgress.value = 0.3f
                 val res = backupRestoreEngine.restoreApp(
                     context = context,
-                    packageName = backup.packageName,
-                    label = backup.label,
+                    packageName = packageName,
+                    label = label,
                     restoreApk = _settings.value.includeApk,
                     restoreData = _settings.value.includeData,
                     restoreDeData = _settings.value.includeDeData,
@@ -307,13 +240,95 @@ class MainViewModel @Inject constructor(
                     restoreSsaid = _settings.value.includeSsaid,
                     customBackupPath = _settings.value.backupPath
                 )
-                if (res.isSuccess) successCount++
+                _operationProgress.value = 1f
+                _currentOperation.value = null
+                if (res.isSuccess) {
+                    _snackbarMessage.value = "Restored successfully: $label"
+                } else {
+                    _snackbarMessage.value = "Restore failed: ${res.exceptionOrNull()?.message}"
+                }
+                loadHistory()
+                scanInstalledApps(context)
+            } catch (t: Throwable) {
+                _currentOperation.value = null
+                _snackbarMessage.value = "Restore error: ${t.message}"
             }
-            _currentOperation.value = null
-            _operationProgress.value = 0f
-            _snackbarMessage.value = "Batch restore complete: $successCount of $total apps restored"
-            scanInstalledApps(context)
-            loadHistory()
+        }
+    }
+
+    fun backupBatch(context: Context, apps: List<AppEntity>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (apps.isEmpty()) return@launch
+                var successCount = 0
+                val total = apps.size
+                apps.forEachIndexed { index, app ->
+                    _currentOperation.value = "Backing up (${index + 1}/$total): ${app.label}"
+                    _operationProgress.value = (index.toFloat() / total.toFloat())
+                    val res = backupRestoreEngine.backupApp(
+                        context = context,
+                        packageName = app.packageName,
+                        label = app.label,
+                        includeApk = _settings.value.includeApk,
+                        includeData = _settings.value.includeData,
+                        includeDeData = _settings.value.includeDeData,
+                        includeExtData = _settings.value.includeExtData,
+                        includeMedia = _settings.value.includeMedia,
+                        includeObb = _settings.value.includeObb,
+                        includePermissions = _settings.value.includePermissions,
+                        includeSsaid = _settings.value.includeSsaid,
+                        customBackupPath = _settings.value.backupPath
+                    )
+                    if (res.isSuccess) successCount++
+                }
+                _currentOperation.value = null
+                _operationProgress.value = 0f
+                _snackbarMessage.value = "Batch backup complete: $successCount of $total apps backed up"
+                scanInstalledApps(context)
+                loadAvailableBackups(context)
+                loadHistory()
+                _storageInfo.value = backupRestoreEngine.getStorageSpace(context, _settings.value.backupPath)
+            } catch (t: Throwable) {
+                _currentOperation.value = null
+                _snackbarMessage.value = "Backup error: ${t.message}"
+            }
+        }
+    }
+
+    fun restoreBatch(context: Context, backups: List<BackupManifest>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (backups.isEmpty()) return@launch
+                var successCount = 0
+                val total = backups.size
+                backups.forEachIndexed { index, backup ->
+                    _currentOperation.value = "Restoring (${index + 1}/$total): ${backup.label}"
+                    _operationProgress.value = (index.toFloat() / total.toFloat())
+                    val res = backupRestoreEngine.restoreApp(
+                        context = context,
+                        packageName = backup.packageName,
+                        label = backup.label,
+                        restoreApk = _settings.value.includeApk,
+                        restoreData = _settings.value.includeData,
+                        restoreDeData = _settings.value.includeDeData,
+                        restoreExtData = _settings.value.includeExtData,
+                        restoreMedia = _settings.value.includeMedia,
+                        restoreObb = _settings.value.includeObb,
+                        restorePermissions = _settings.value.includePermissions,
+                        restoreSsaid = _settings.value.includeSsaid,
+                        customBackupPath = _settings.value.backupPath
+                    )
+                    if (res.isSuccess) successCount++
+                }
+                _currentOperation.value = null
+                _operationProgress.value = 0f
+                _snackbarMessage.value = "Batch restore complete: $successCount of $total apps restored"
+                scanInstalledApps(context)
+                loadHistory()
+            } catch (t: Throwable) {
+                _currentOperation.value = null
+                _snackbarMessage.value = "Batch restore error: ${t.message}"
+            }
         }
     }
 
