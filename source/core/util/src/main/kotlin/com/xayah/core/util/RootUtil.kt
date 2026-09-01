@@ -75,36 +75,37 @@ object RootUtil {
 
     fun getAppUid(packageName: String): Pair<Int, Int>? {
         // Strategy 1: dumpsys package <pkg>
-        val dumpRes = executeCommand("dumpsys package $packageName | grep -E 'userId=|appId='", useRoot = true)
+        val dumpRes = executeCommand("dumpsys package $packageName 2>/dev/null", useRoot = true)
         if (dumpRes.isSuccess && dumpRes.out.isNotEmpty()) {
             for (line in dumpRes.out) {
                 val cleaned = line.trim()
-                val uidStr = if (cleaned.contains("userId=")) cleaned.substringAfter("userId=").substringBefore(" ")
-                else if (cleaned.contains("appId=")) cleaned.substringAfter("appId=").substringBefore(" ")
-                else ""
-                val uid = uidStr.trim().toIntOrNull()
-                if (uid != null && uid > 0) return Pair(uid, uid)
+                if (cleaned.contains("userId=") || cleaned.contains("appId=")) {
+                    val uidStr = if (cleaned.contains("userId=")) cleaned.substringAfter("userId=").substringBefore(" ")
+                    else cleaned.substringAfter("appId=").substringBefore(" ")
+                    val uid = uidStr.trim().toIntOrNull()
+                    if (uid != null && uid > 1000) return Pair(uid, uid)
+                }
             }
         }
 
-        // Strategy 2: stat -c '%u:%g' /data/data/$packageName
-        val res = executeCommand("stat -c '%u:%g' /data/data/$packageName", useRoot = true)
+        // Strategy 2: stat -c '%u:%g' /data/user/0/$packageName or /data/data/$packageName
+        val res = executeCommand("stat -c '%u:%g' /data/user/0/$packageName 2>/dev/null || stat -c '%u:%g' /data/data/$packageName 2>/dev/null", useRoot = true)
         if (res.isSuccess && res.out.isNotEmpty()) {
             val parts = res.out.first().trim().split(":")
             if (parts.size == 2) {
                 val uid = parts[0].toIntOrNull()
                 val gid = parts[1].toIntOrNull()
-                if (uid != null && gid != null && uid > 0) return Pair(uid, gid)
+                if (uid != null && gid != null && uid > 1000) return Pair(uid, gid)
             }
         }
 
-        // Strategy 3: ls -nd /data/data/$packageName
-        val lsRes = executeCommand("ls -nd /data/data/$packageName", useRoot = true)
+        // Strategy 3: ls -nd /data/user/0/$packageName
+        val lsRes = executeCommand("ls -nd /data/user/0/$packageName 2>/dev/null || ls -nd /data/data/$packageName 2>/dev/null", useRoot = true)
         if (lsRes.isSuccess && lsRes.out.isNotEmpty()) {
             val tokens = lsRes.out.first().split("\\s+".toRegex())
             val uid = tokens.getOrNull(2)?.toIntOrNull()
             val gid = tokens.getOrNull(3)?.toIntOrNull()
-            if (uid != null && gid != null && uid > 0) return Pair(uid, gid)
+            if (uid != null && gid != null && uid > 1000) return Pair(uid, gid)
         }
 
         return null

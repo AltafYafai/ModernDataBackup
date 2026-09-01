@@ -429,19 +429,22 @@ class BackupRestoreEngine @Inject constructor(
                 }
             }
 
-            // 2. Internal Data Backup (/data/data/<pkg>)
+            // 2. Internal Data Backup (/data/data/<pkg> and /data/user/0/<pkg>)
             if (includeData) {
                 onProgress(0.50f, "Archiving Internal Data...")
-                val dataPath = appInfo.dataDir ?: "/data/data/$packageName"
+                val dataPath = appInfo.dataDir ?: "/data/user/0/$packageName"
                 val destArchive = File(appDir, "data.tar.gz")
                 if (isRoot) {
                     val tmpStage = "/data/local/tmp/mbackup_stage_$packageName"
                     val cmd = """
-                        mkdir -p '$tmpStage'
-                        cd '$dataPath' && (tar --exclude='./lib' --exclude='./cache' --exclude='./code_cache' --exclude='lib' --exclude='cache' --exclude='code_cache' -czf '$tmpStage/data.tar.gz' . 2>/dev/null || (tar --exclude='./lib' --exclude='./cache' --exclude='./code_cache' --exclude='lib' --exclude='cache' --exclude='code_cache' -cf - . | gzip > '$tmpStage/data.tar.gz') 2>/dev/null || tar --exclude='./lib' --exclude='./cache' --exclude='./code_cache' --exclude='lib' --exclude='cache' --exclude='code_cache' -cf '$tmpStage/data.tar.gz' . 2>/dev/null)
-                        cp -f '$tmpStage/data.tar.gz' '${destArchive.absolutePath}'
-                        chmod 644 '${destArchive.absolutePath}'
                         rm -rf '$tmpStage'
+                        mkdir -p '$tmpStage'
+                        (cp -a '$dataPath/.' '$tmpStage/' 2>/dev/null || cp -a '/data/data/$packageName/.' '$tmpStage/' 2>/dev/null || cp -a '/data/user/0/$packageName/.' '$tmpStage/' 2>/dev/null)
+                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache'
+                        (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || (tar -cf - . | gzip > '$tmpStage.tar.gz') 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null))
+                        cp -f '$tmpStage.tar.gz' '${destArchive.absolutePath}'
+                        chmod 644 '${destArchive.absolutePath}'
+                        rm -rf '$tmpStage' '$tmpStage.tar.gz'
                     """.trimIndent().replace("\n", " ; ")
                     RootUtil.executeCommand(cmd, useRoot = true)
                 } else {
@@ -458,9 +461,18 @@ class BackupRestoreEngine @Inject constructor(
                 onProgress(0.70f, "Backing up Protected Data...")
                 val dePath = "/data/user_de/0/$packageName"
                 val destDeArchive = File(appDir, "data_de.tar.gz")
-                val tmpStage = "/data/local/tmp/mbackup_de_stage_$packageName"
+                val tmpStage = "/data/local/tmp/mbackup_de_$packageName"
                 val cmd = """
-                    test -d '$dePath' && mkdir -p '$tmpStage' && cd '$dePath' && (tar --exclude='./lib' --exclude='./cache' --exclude='./code_cache' --exclude='lib' -czf '$tmpStage/data_de.tar.gz' . 2>/dev/null || tar --exclude='./lib' --exclude='lib' -cf '$tmpStage/data_de.tar.gz' . 2>/dev/null) && cp -f '$tmpStage/data_de.tar.gz' '${destDeArchive.absolutePath}' && chmod 644 '${destDeArchive.absolutePath}' && rm -rf '$tmpStage'
+                    if [ -d '$dePath' ]; then
+                        rm -rf '$tmpStage'
+                        mkdir -p '$tmpStage'
+                        cp -a '$dePath/.' '$tmpStage/' 2>/dev/null
+                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache'
+                        (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null))
+                        cp -f '$tmpStage.tar.gz' '${destDeArchive.absolutePath}'
+                        chmod 644 '${destDeArchive.absolutePath}'
+                        rm -rf '$tmpStage' '$tmpStage.tar.gz'
+                    fi
                 """.trimIndent().replace("\n", " ; ")
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
@@ -629,26 +641,36 @@ class BackupRestoreEngine @Inject constructor(
                 else null
 
                 if (dataTar != null) {
-                    val dataPath = "/data/data/$packageName"
-                    val tmpDataTar = "/data/local/tmp/restore_data_$packageName.tar.gz"
+                    val dataPath = "/data/user/0/$packageName"
+                    val tmpStage = "/data/local/tmp/mrestore_stage_$packageName"
                     val cmd = """
-                        mkdir -p '$dataPath'
-                        cp -f '$dataTar' '$tmpDataTar'
-                        cd '$dataPath' && (tar --exclude='./lib' --exclude='lib' -xzf '$tmpDataTar' 2>/dev/null || (gzip -dc '$tmpDataTar' | tar --exclude='./lib' --exclude='lib' -xf -) 2>/dev/null || tar --exclude='./lib' --exclude='lib' -xf '$tmpDataTar' 2>/dev/null)
-                        rm -f '$tmpDataTar'
+                        rm -rf '$tmpStage'
+                        mkdir -p '$tmpStage'
+                        cp -f '$dataTar' '$tmpStage/data.tar.gz'
+                        (cd '$tmpStage' && (tar -xzf '$tmpStage/data.tar.gz' 2>/dev/null || (gzip -dc '$tmpStage/data.tar.gz' | tar -xf -) 2>/dev/null || tar -xf '$tmpStage/data.tar.gz' 2>/dev/null))
+                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache' '$tmpStage/data.tar.gz'
+                        
+                        mkdir -p '$dataPath' '/data/data/$packageName'
+                        find '$dataPath' -mindepth 1 ! -name lib -delete 2>/dev/null
+                        find '/data/data/$packageName' -mindepth 1 ! -name lib -delete 2>/dev/null
+                        
+                        (cp -a '$tmpStage/.' '$dataPath/' 2>/dev/null || cp -a '$tmpStage/.' '/data/data/$packageName/' 2>/dev/null)
+                        rm -rf '$tmpStage'
                     """.trimIndent().replace("\n", " ; ")
                     RootUtil.executeCommand(cmd, useRoot = true)
 
                     if (uidGid != null) {
                         val permCmd = """
-                            chown -R ${uidGid.first}:${uidGid.second} '$dataPath'
-                            chmod 755 '$dataPath'
+                            chown -R ${uidGid.first}:${uidGid.second} '$dataPath' '/data/data/$packageName' 2>/dev/null
+                            chmod 755 '$dataPath' '/data/data/$packageName' 2>/dev/null
                             find '$dataPath' -mindepth 1 ! -name lib -type d -exec chmod 771 {} + 2>/dev/null
                             find '$dataPath' -type f -exec chmod 660 {} + 2>/dev/null
+                            find '/data/data/$packageName' -mindepth 1 ! -name lib -type d -exec chmod 771 {} + 2>/dev/null
+                            find '/data/data/$packageName' -type f -exec chmod 660 {} + 2>/dev/null
                         """.trimIndent().replace("\n", " ; ")
                         RootUtil.executeCommand(permCmd, useRoot = true)
                     }
-                    RootUtil.executeCommand("restorecon -FR '$dataPath'", useRoot = true)
+                    RootUtil.executeCommand("restorecon -FR '$dataPath' '/data/data/$packageName' 2>/dev/null", useRoot = true)
                 }
             }
 
@@ -657,23 +679,31 @@ class BackupRestoreEngine @Inject constructor(
                 onProgress(0.75f, "Restoring Protected Data...")
                 val deTar = "${appDir.absolutePath}/data_de.tar.gz"
                 val dePath = "/data/user_de/0/$packageName"
-                val tmpDeTar = "/data/local/tmp/restore_de_$packageName.tar.gz"
+                val tmpStage = "/data/local/tmp/mrestore_de_stage_$packageName"
                 val cmd = """
-                    test -f '$deTar' && mkdir -p '$dePath' && cp -f '$deTar' '$tmpDeTar' && cd '$dePath' && (tar --exclude='./lib' --exclude='lib' -xzf '$tmpDeTar' 2>/dev/null || tar --exclude='./lib' --exclude='lib' -xf '$tmpDeTar' 2>/dev/null)
-                    rm -f '$tmpDeTar'
+                    if [ -f '$deTar' ]; then
+                        rm -rf '$tmpStage'
+                        mkdir -p '$tmpStage'
+                        cp -f '$deTar' '$tmpStage/data_de.tar.gz'
+                        (cd '$tmpStage' && (tar -xzf '$tmpStage/data_de.tar.gz' 2>/dev/null || (gzip -dc '$tmpStage/data_de.tar.gz' | tar -xf -) 2>/dev/null || tar -xf '$tmpStage/data_de.tar.gz' 2>/dev/null))
+                        rm -rf '$tmpStage/lib' '$tmpStage/cache' '$tmpStage/code_cache' '$tmpStage/data_de.tar.gz'
+                        mkdir -p '$dePath'
+                        cp -a '$tmpStage/.' '$dePath/' 2>/dev/null
+                        rm -rf '$tmpStage'
+                    fi
                 """.trimIndent().replace("\n", " ; ")
                 RootUtil.executeCommand(cmd, useRoot = true)
 
                 if (uidGid != null) {
                     val dePermCmd = """
-                        chown -R ${uidGid.first}:${uidGid.second} '$dePath'
-                        chmod 755 '$dePath'
+                        chown -R ${uidGid.first}:${uidGid.second} '$dePath' 2>/dev/null
+                        chmod 755 '$dePath' 2>/dev/null
                         find '$dePath' -mindepth 1 ! -name lib -type d -exec chmod 771 {} + 2>/dev/null
                         find '$dePath' -type f -exec chmod 660 {} + 2>/dev/null
                     """.trimIndent().replace("\n", " ; ")
                     RootUtil.executeCommand(dePermCmd, useRoot = true)
                 }
-                RootUtil.executeCommand("restorecon -FR '$dePath'", useRoot = true)
+                RootUtil.executeCommand("restorecon -FR '$dePath' 2>/dev/null", useRoot = true)
             }
 
             // 5. Restore External Data
