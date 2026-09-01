@@ -11,4 +11,5 @@ class TaskRepository @Inject constructor(private val taskDao: TaskDao) {
     suspend fun insert(task: TaskEntity): Long = taskDao.insert(task)
     suspend fun update(task: TaskEntity) = taskDao.update(task)
     suspend fun delete(task: TaskEntity) = taskDao.delete(task)
+    suspend fun clearAll() = taskDao.clearAll()
 }
