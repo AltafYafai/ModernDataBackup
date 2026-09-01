@@ -1,9 +1,6 @@
 package com.xayah.core.rootservice
-
-import com.github.topjohnwu.libsu.core.api.RootShell
-import com.github.topjohnwu.libsu.core.command.CommandResult
-import com.github.topjohnwu.libsu.core.listener.RootListener
-
+data class CommandResult(val code: Int, val out: String, val err: List<String>)
+interface RootListener { fun onRootAvailable() }
 interface RemoteRootService {
     fun isRootAvailable(): Boolean
     fun execute(command: String): CommandResult
