@@ -2,7 +2,7 @@ package com.xayah.buildlogic.convention
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 class LibraryRoomConventionPlugin : Plugin<Project> {
-    override fun apply(target: Project) = with(target) {
+    override fun apply(target: Project) { with(target) {
         plugins.apply("com.android.library")
         plugins.apply("org.jetbrains.kotlin.android")
         plugins.apply("com.google.devtools.ksp")
@@ -23,4 +23,5 @@ class LibraryRoomConventionPlugin : Plugin<Project> {
         dependencies.add("implementation", "androidx.room:room-ktx:2.6.1")
         dependencies.add("ksp", "androidx.room:room-compiler:2.6.1")
     }
+}
 }

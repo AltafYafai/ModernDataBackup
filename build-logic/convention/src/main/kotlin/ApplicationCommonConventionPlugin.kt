@@ -2,7 +2,7 @@ package com.xayah.buildlogic.convention
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 class ApplicationCommonConventionPlugin : Plugin<Project> {
-    override fun apply(target: Project) = with(target) {
+    override fun apply(target: Project) { with(target) {
         plugins.apply("com.android.application")
         plugins.apply("org.jetbrains.kotlin.android")
         plugins.apply("org.jetbrains.kotlin.plugin.serialization")
@@ -27,4 +27,5 @@ class ApplicationCommonConventionPlugin : Plugin<Project> {
             kotlinOptions { jvmTarget = "17" }
         }
     }
+}
 }
