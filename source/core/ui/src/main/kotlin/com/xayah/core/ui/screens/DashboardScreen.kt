@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.xayah.core.ui.viewmodel.MainViewModel
+import com.xayah.core.util.PathUtil
 import com.xayah.core.util.toDateString
 
 @Composable
@@ -41,6 +42,7 @@ fun DashboardScreen(
     val settings by viewModel.settings.collectAsState()
 
     var showStorageDialog by remember { mutableStateOf(false) }
+    var customPathInput by remember(settings.backupPath) { mutableStateOf(settings.backupPath) }
 
     val userAppsCount = installedApps.count { !it.isSystemApp }
     val systemAppsCount = installedApps.count { it.isSystemApp }
@@ -51,19 +53,23 @@ fun DashboardScreen(
             onDismissRequest = { showStorageDialog = false },
             title = {
                 Text(
-                    text = "Select Backup Storage",
+                    text = "Backup Storage Location",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(
-                        text = "Choose the storage destination for your backup archives:",
+                        text = "Choose where backup data should be saved (Default: /sdcard/moderndatabackup):",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Detected Volumes
                     storageLocations.forEach { loc ->
                         val isCurrent = settings.backupPath == loc.path
                         Card(
@@ -109,6 +115,45 @@ fun DashboardScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Custom Directory Path Field
+                    OutlinedTextField(
+                        value = customPathInput,
+                        onValueChange = { customPathInput = it },
+                        label = { Text("Custom Directory Path") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                customPathInput = PathUtil.DEFAULT_BACKUP_PATH
+                                viewModel.setCustomBackupPath(context, PathUtil.DEFAULT_BACKUP_PATH)
+                                showStorageDialog = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Reset Default")
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.setCustomBackupPath(context, customPathInput)
+                                showStorageDialog = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Apply Path")
                         }
                     }
                 }
@@ -222,7 +267,7 @@ fun DashboardScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Active Backup Destination",
+                                    text = "Backup Storage Destination",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -600,115 +645,6 @@ fun DashboardScreen(
                     isSuccess = task.status == "SUCCESS"
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun StatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    count: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit = {}
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        ),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Text(
-                text = count,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun ActivityItem(
-    title: String,
-    subtitle: String,
-    time: String,
-    isSuccess: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isSuccess) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = null,
-                        tint = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = time,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

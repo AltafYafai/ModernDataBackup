@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class UiSettings(
-    val backupPath: String = "/storage/emulated/0/ModernDataBackup",
+    val backupPath: String = "/sdcard/moderndatabackup",
     val compressionLevel: Float = 3f,
     val includeData: Boolean = true,
     val includeApk: Boolean = true,
@@ -128,6 +128,17 @@ class MainViewModel @Inject constructor(
             _settings.value = _settings.value.copy(backupPath = location.path)
             _storageInfo.value = backupRestoreEngine.getStorageSpace(context, location.path)
             _snackbarMessage.value = "Storage switched to: ${location.name}"
+            loadAvailableBackups(context)
+            scanInstalledApps(context)
+        }
+    }
+
+    fun setCustomBackupPath(context: Context, customPath: String) {
+        if (customPath.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _settings.value = _settings.value.copy(backupPath = customPath.trim())
+            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, customPath.trim())
+            _snackbarMessage.value = "Backup destination set to: ${customPath.trim()}"
             loadAvailableBackups(context)
             scanInstalledApps(context)
         }
