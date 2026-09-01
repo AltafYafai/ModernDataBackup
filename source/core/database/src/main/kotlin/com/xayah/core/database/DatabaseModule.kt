@@ -17,7 +17,15 @@ object DatabaseModule {
             .fallbackToDestructiveMigration()
             .build()
 
-    @Provides fun provideTaskDao(db: AppDatabase) = db.taskDao()
-    @Provides fun provideAppDao(db: AppDatabase) = db.appDao()
-    @Provides fun provideFileDao(db: AppDatabase) = db.fileDao()
+    @Provides
+    @Singleton
+    fun provideTaskDao(db: AppDatabase): com.xayah.core.database.dao.TaskDao = db.taskDao()
+
+    @Provides
+    @Singleton
+    fun provideAppDao(db: AppDatabase): com.xayah.core.database.dao.AppDao = db.appDao()
+
+    @Provides
+    @Singleton
+    fun provideFileDao(db: AppDatabase): com.xayah.core.database.dao.FileDao = db.fileDao()
 }
