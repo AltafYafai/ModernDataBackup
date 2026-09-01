@@ -1,0 +1,79 @@
+[versions]
+compileSdk = "35"
+minSdk = "24"
+targetSdk = "35"
+versionCode = "1000000"
+versionName = "1.0.0"
+kotlin = "2.0.21"
+agp = "8.11.1"
+ksp = "2.0.21-1.0.28"
+hilt = "2.49"
+composeBom = "2025.02.01"
+room = "2.6.1"
+workManager = "2.10.0"
+libsu = "6.1.0"
+okhttp = "4.12.0"
+retrofit = "2.9.0"
+zip4j = "2.12.0"
+coil = "2.6.0"
+datastore = "1.1.1"
+serialization = "1.6.2"
+coroutines = "1.8.0"
+navigation = "2.8.5"
+hiltNavigation = "1.2.1"
+smbj = "0.15.0"
+sshj = "0.39.0"
+gson = "2.10.1"
+bouncycastle = "1.78.1"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.13.1" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version = "1.0.1" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.7.0" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.9.0" }
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigation" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version = "2.8.4" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version = "2.8.4" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "serialization" }
+kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+libsu-core = { module = "com.github.topjohnwu.libsu:core", version.ref = "libsu" }
+libsu-service = { module = "com.github.topjohnwu.libsu:service", version.ref = "libsu" }
+zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+smbj = { module = "com.hierynomus:smbj", version.ref = "smbj" }
+sshj = { module = "com.hierynomus:sshj", version.ref = "sshj" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+bouncycastle = { group = "org.bouncycastle", name = "bcutil-jdk18on", version.ref = "bouncycastle" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+library-common = { id = "library.common", version = "unspecified" }
+library-compose = { id = "library.compose", version = "unspecified" }
+library-room = { id = "library.room", version = "unspecified" }
+library-hilt = { id = "library.hilt", version = "unspecified" }
+library-hilt-work = { id = "library.hilt.work", version = "unspecified" }
+application-common = { id = "application.common", version = "unspecified" }
+application-compose = { id = "application.compose", version = "unspecified" }
+application-hilt = { id = "application.hilt", version = "unspecified" }
+application-hilt-work = { id = "application.hilt.work", version = "unspecified" }
