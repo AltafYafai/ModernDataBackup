@@ -2,14 +2,11 @@ package com.xayah.core.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import com.xayah.core.data.repository.AppsRepo
 import com.xayah.core.data.repository.BackupRestoreEngine
 import com.xayah.core.data.repository.StorageSpaceInfo
 import com.xayah.core.data.repository.TaskRepository
-import com.xayah.core.database.AppDatabase
 import com.xayah.core.database.entity.AppEntity
 import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.util.PathUtil
@@ -28,23 +25,6 @@ data class UiSettings(
     val includeSystem: Boolean = false,
     val autoBackup: Boolean = false
 )
-
-class MainViewModelFactory(
-    private val context: Context
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        val db = Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "databackup.db"
-        ).fallbackToDestructiveMigration().build()
-        val appsRepo = AppsRepo(db.appDao())
-        val taskRepo = TaskRepository(db.taskDao())
-        val engine = BackupRestoreEngine(db.taskDao())
-        return MainViewModel(appsRepo, engine, taskRepo) as T
-    }
-}
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
