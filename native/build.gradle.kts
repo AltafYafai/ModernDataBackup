@@ -1,7 +1,6 @@
-plugins { id("com.android.library"); id("org.jetbrains.kotlin.android") }
+plugins { alias(libs.plugins.library.common) }
 android {
-    namespace = "com.xayah.modernnative"; compileSdk = 35
-    defaultConfig { minSdk = 24 }
+    namespace = "com.xayah.modernnative"
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
 }
-dependencies { implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0") }
+dependencies { implementation(libs.kotlinx.coroutines.core) }
