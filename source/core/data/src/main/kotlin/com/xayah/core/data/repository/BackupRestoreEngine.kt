@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.storage.StorageManager
 import com.xayah.core.database.dao.TaskDao
 import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.util.FileUtil
@@ -49,6 +50,11 @@ data class BackupManifest(
     val hasMedia: Boolean = false,
     val hasObb: Boolean = false,
     val hasSsaid: Boolean = false,
+    val apkSize: Long = 0L,
+    val dataSize: Long = 0L,
+    val mediaSize: Long = 0L,
+    val obbSize: Long = 0L,
+    val extDataSize: Long = 0L,
     val permissions: List<String> = emptyList(),
     val totalSize: Long = 0L
 )
@@ -99,9 +105,11 @@ class BackupRestoreEngine @Inject constructor(
 
     suspend fun getAvailableStorageLocations(context: Context): List<StorageLocation> = withContext(Dispatchers.IO) {
         val locations = mutableListOf<StorageLocation>()
+        val seenPaths = mutableSetOf<String>()
 
         // 1. Primary Default Storage (/sdcard/moderndatabackup)
         val defaultPath = PathUtil.DEFAULT_BACKUP_PATH
+        seenPaths.add(defaultPath)
         val defaultStat = try { StatFs("/sdcard") } catch (e: Exception) { null }
         val defaultFree = defaultStat?.let { it.availableBlocksLong * it.blockSizeLong } ?: 0L
         val defaultTotal = defaultStat?.let { it.blockCountLong * it.blockSizeLong } ?: 0L
@@ -115,19 +123,22 @@ class BackupRestoreEngine @Inject constructor(
             )
         )
 
-        // 2. Removable SD Cards / USB OTG
+        // 2. Removable SD Cards via getExternalFilesDirs
         try {
-            val storageRoot = File("/storage")
-            if (storageRoot.exists() && storageRoot.isDirectory) {
-                storageRoot.listFiles()?.forEach { volume ->
-                    if (volume.isDirectory && volume.name != "emulated" && volume.name != "self") {
-                        val sdBackupDir = File(volume, PathUtil.BACKUP_DIR_NAME)
-                        val stat = try { StatFs(volume.path) } catch (e: Exception) { null }
+            val extFilesDirs = context.getExternalFilesDirs(null)
+            extFilesDirs?.forEachIndexed { index, dir ->
+                if (index > 0 && dir != null) {
+                    val fullPath = dir.absolutePath
+                    val rootVol = fullPath.substringBefore("/Android")
+                    if (rootVol.isNotEmpty() && !seenPaths.contains(rootVol)) {
+                        val sdBackupDir = File(rootVol, PathUtil.BACKUP_DIR_NAME)
+                        seenPaths.add(rootVol)
+                        val stat = try { StatFs(rootVol) } catch (e: Exception) { null }
                         val free = stat?.let { it.availableBlocksLong * it.blockSizeLong } ?: 0L
                         val total = stat?.let { it.blockCountLong * it.blockSizeLong } ?: 0L
                         locations.add(
                             StorageLocation(
-                                name = "MicroSD Card (${volume.name})",
+                                name = "MicroSD Card (${rootVol.substringAfterLast("/")})",
                                 path = sdBackupDir.absolutePath,
                                 isRemovable = true,
                                 freeSpace = FileUtil.formatBytes(free),
@@ -141,9 +152,69 @@ class BackupRestoreEngine @Inject constructor(
             e.printStackTrace()
         }
 
-        // 3. App Private Storage
+        // 3. StorageManager storageVolumes
+        try {
+            val sm = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+            sm?.storageVolumes?.forEach { volume ->
+                if (volume.isRemovable) {
+                    val uuid = volume.uuid ?: "SDCard"
+                    val rootPath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        volume.directory?.absolutePath ?: "/storage/$uuid"
+                    } else {
+                        "/storage/$uuid"
+                    }
+                    if (!seenPaths.contains(rootPath)) {
+                        seenPaths.add(rootPath)
+                        val sdBackupDir = File(rootPath, PathUtil.BACKUP_DIR_NAME)
+                        val stat = try { StatFs(rootPath) } catch (e: Exception) { null }
+                        val free = stat?.let { it.availableBlocksLong * it.blockSizeLong } ?: 0L
+                        val total = stat?.let { it.blockCountLong * it.blockSizeLong } ?: 0L
+                        locations.add(
+                            StorageLocation(
+                                name = "MicroSD Card ($uuid)",
+                                path = sdBackupDir.absolutePath,
+                                isRemovable = true,
+                                freeSpace = FileUtil.formatBytes(free),
+                                totalSpace = FileUtil.formatBytes(total)
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 4. Root /storage and /mnt/media_rw inspection
+        if (RootUtil.isRootAvailable()) {
+            val res = RootUtil.executeCommand("ls -d /storage/* /mnt/media_rw/* 2>/dev/null", useRoot = true)
+            if (res.isSuccess) {
+                res.out.forEach { line ->
+                    val path = line.trim().removeSuffix("/")
+                    val name = path.substringAfterLast("/")
+                    if (path.isNotEmpty() && name != "emulated" && name != "self" && !seenPaths.contains(path)) {
+                        seenPaths.add(path)
+                        val sdBackupDir = File(path, PathUtil.BACKUP_DIR_NAME)
+                        val stat = try { StatFs(path) } catch (e: Exception) { null }
+                        val free = stat?.let { it.availableBlocksLong * it.blockSizeLong } ?: 0L
+                        val total = stat?.let { it.blockCountLong * it.blockSizeLong } ?: 0L
+                        locations.add(
+                            StorageLocation(
+                                name = "External Storage ($name)",
+                                path = sdBackupDir.absolutePath,
+                                isRemovable = true,
+                                freeSpace = FileUtil.formatBytes(free),
+                                totalSpace = FileUtil.formatBytes(total)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. App Private Storage
         val appExt = context.getExternalFilesDir(null)
-        if (appExt != null) {
+        if (appExt != null && !seenPaths.contains(appExt.absolutePath)) {
             val appBackupDir = File(appExt, PathUtil.BACKUP_DIR_NAME)
             val stat = try { StatFs(appExt.path) } catch (e: Exception) { null }
             val free = stat?.let { it.availableBlocksLong * it.blockSizeLong } ?: 0L
@@ -192,29 +263,76 @@ class BackupRestoreEngine @Inject constructor(
             var hasObb = false
             var hasSsaid = false
 
+            var apkSize = 0L
+            var dataSize = 0L
+            var mediaSize = 0L
+            var obbSize = 0L
+            var extDataSize = 0L
+
             if (isRoot) {
-                val lsRes = RootUtil.executeCommand("ls '${appDir.absolutePath}'", useRoot = true)
+                val lsRes = RootUtil.executeCommand("ls -l '${appDir.absolutePath}'", useRoot = true)
                 if (lsRes.isSuccess) {
-                    val files = lsRes.out
-                    hasApk = files.any { it.endsWith(".apk") }
-                    hasData = files.contains("data.tar.gz") || files.contains("data.tar")
-                    hasDeData = files.contains("data_de.tar.gz") || files.contains("data_de.tar")
-                    hasExtData = files.contains("external_data.tar.gz") || files.contains("external_data")
-                    hasMedia = files.contains("media.tar.gz")
-                    hasObb = files.contains("obb.tar.gz")
-                    hasSsaid = files.contains("ssaid.txt")
+                    lsRes.out.forEach { line ->
+                        val parts = line.split("\\s+".toRegex())
+                        val size = parts.getOrNull(4)?.toLongOrNull() ?: 0L
+                        val filename = parts.lastOrNull() ?: ""
+                        if (filename.endsWith(".apk")) {
+                            hasApk = true
+                            apkSize += size
+                        }
+                        if (filename == "data.tar.gz" || filename == "data.tar") {
+                            hasData = true
+                            dataSize += size
+                        }
+                        if (filename == "data_de.tar.gz" || filename == "data_de.tar") {
+                            hasDeData = true
+                            dataSize += size
+                        }
+                        if (filename == "external_data.tar.gz" || filename == "external_data") {
+                            hasExtData = true
+                            extDataSize += size
+                        }
+                        if (filename == "media.tar.gz") {
+                            hasMedia = true
+                            mediaSize += size
+                        }
+                        if (filename == "obb.tar.gz") {
+                            hasObb = true
+                            obbSize += size
+                        }
+                        if (filename == "ssaid.txt") {
+                            hasSsaid = true
+                        }
+                    }
                 }
             } else {
-                hasApk = File(appDir, "base.apk").exists() || appDir.listFiles()?.any { it.name.endsWith(".apk") } == true
-                hasData = File(appDir, "data.tar.gz").exists()
-                hasDeData = File(appDir, "data_de.tar.gz").exists()
-                hasExtData = File(appDir, "external_data.tar.gz").exists() || File(appDir, "external_data").exists()
-                hasMedia = File(appDir, "media.tar.gz").exists()
-                hasObb = File(appDir, "obb.tar.gz").exists()
+                val apkFile = File(appDir, "base.apk")
+                hasApk = apkFile.exists()
+                if (hasApk) apkSize = apkFile.length()
+
+                val dataFile = File(appDir, "data.tar.gz")
+                hasData = dataFile.exists()
+                if (hasData) dataSize = dataFile.length()
+
+                val deFile = File(appDir, "data_de.tar.gz")
+                hasDeData = deFile.exists()
+
+                val extFile = File(appDir, "external_data.tar.gz")
+                hasExtData = extFile.exists()
+                if (hasExtData) extDataSize = extFile.length()
+
+                val mediaFile = File(appDir, "media.tar.gz")
+                hasMedia = mediaFile.exists()
+                if (hasMedia) mediaSize = mediaFile.length()
+
+                val obbFile = File(appDir, "obb.tar.gz")
+                hasObb = obbFile.exists()
+                if (hasObb) obbSize = obbFile.length()
+
                 hasSsaid = File(appDir, "ssaid.txt").exists()
             }
 
-            val totalSize = FileUtil.getSize(appDir)
+            val totalSize = (apkSize + dataSize + mediaSize + obbSize + extDataSize).coerceAtLeast(FileUtil.getSize(appDir))
 
             val label = try {
                 val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
@@ -238,6 +356,11 @@ class BackupRestoreEngine @Inject constructor(
                         hasMedia = hasMedia,
                         hasObb = hasObb,
                         hasSsaid = hasSsaid,
+                        apkSize = apkSize,
+                        dataSize = dataSize,
+                        mediaSize = mediaSize,
+                        obbSize = obbSize,
+                        extDataSize = extDataSize,
                         totalSize = totalSize
                     )
                 )

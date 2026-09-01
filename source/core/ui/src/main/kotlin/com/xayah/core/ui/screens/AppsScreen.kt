@@ -393,11 +393,22 @@ fun AppItemCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                val totalAppSize = (app.apkSize + app.dataSize + app.mediaSize + app.obbSize + app.extDataSize).coerceAtLeast(app.dataSize)
                 Text(
-                    text = "${FileUtil.formatBytes(app.dataSize)} • ${if (app.enabled) "Backed up" else "No backup"}",
+                    text = "Total: ${FileUtil.formatBytes(totalAppSize)} • ${if (app.enabled) "Backed up" else "Not backed up"}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (app.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    color = if (app.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    fontWeight = FontWeight.Medium
                 )
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (app.apkSize > 0) ComponentBadge("APK: ${FileUtil.formatBytes(app.apkSize)}")
+                    if (app.dataSize > 0) ComponentBadge("Data: ${FileUtil.formatBytes(app.dataSize)}")
+                    if (app.mediaSize > 0) ComponentBadge("Media: ${FileUtil.formatBytes(app.mediaSize)}")
+                    if (app.obbSize > 0) ComponentBadge("OBB: ${FileUtil.formatBytes(app.obbSize)}")
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -477,20 +488,19 @@ fun RestoreBackupCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "${FileUtil.formatBytes(backup.totalSize)} • Saved: ${backup.backupTime.toDateString()}",
+                    text = "Total Archive: ${FileUtil.formatBytes(backup.totalSize)} • ${backup.backupTime.toDateString()}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.outline,
+                    fontWeight = FontWeight.Medium
                 )
                 Row(
                     modifier = Modifier.padding(top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (backup.hasApk) ComponentBadge("APK")
-                    if (backup.hasData) ComponentBadge("DATA")
-                    if (backup.hasDeData) ComponentBadge("DE")
-                    if (backup.hasExtData) ComponentBadge("EXT")
-                    if (backup.hasMedia) ComponentBadge("MEDIA")
-                    if (backup.hasObb) ComponentBadge("OBB")
+                    if (backup.hasApk) ComponentBadge(if (backup.apkSize > 0) "APK ${FileUtil.formatBytes(backup.apkSize)}" else "APK")
+                    if (backup.hasData) ComponentBadge(if (backup.dataSize > 0) "Data ${FileUtil.formatBytes(backup.dataSize)}" else "DATA")
+                    if (backup.hasMedia) ComponentBadge(if (backup.mediaSize > 0) "Media ${FileUtil.formatBytes(backup.mediaSize)}" else "MEDIA")
+                    if (backup.hasObb) ComponentBadge(if (backup.obbSize > 0) "OBB ${FileUtil.formatBytes(backup.obbSize)}" else "OBB")
                     if (backup.hasSsaid) ComponentBadge("LOGINS")
                 }
             }
@@ -511,13 +521,15 @@ fun RestoreBackupCard(
 @Composable
 fun ComponentBadge(name: String) {
     Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
     ) {
         Text(
             text = name,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

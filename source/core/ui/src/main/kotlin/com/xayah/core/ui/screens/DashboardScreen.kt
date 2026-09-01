@@ -1,8 +1,10 @@
 package com.xayah.core.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -166,7 +168,7 @@ fun DashboardScreen(
                     ) {
                         Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Reset to Default (/sdcard/moderndatabackup)")
+                        Text("Reset Default (/sdcard/moderndatabackup)")
                     }
                 }
             },
@@ -182,7 +184,7 @@ fun DashboardScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(vertical = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Prominent Root Status Card at the Home Page Top
@@ -216,17 +218,12 @@ fun DashboardScreen(
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = if (isRoot) "Root Access: Granted" else "Root Access: Not Granted",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isRoot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
+                        Text(
+                            text = if (isRoot) "Root Access: Granted" else "Root Access: Not Granted",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRoot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                        )
                         Text(
                             text = if (isRoot) "Engine: $rootType • SELinux: $selinuxMode" else "Standard mode. Tap below to grant SU permissions.",
                             style = MaterialTheme.typography.bodySmall,
@@ -250,7 +247,7 @@ fun DashboardScreen(
             }
         }
 
-        // 2. Clickable Storage Card on Dashboard (Click to switch / pick directory)
+        // 2. Clickable Storage Card on Dashboard
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -422,7 +419,7 @@ fun DashboardScreen(
             }
         }
 
-        // Swift Backup-style Action Cards Header
+        // Operations Header
         item {
             Text(
                 text = "Operations",
@@ -432,15 +429,17 @@ fun DashboardScreen(
             )
         }
 
-        // 3. Backup All User Apps Card (Swift Backup Full Scope)
+        // 3. Backup All User Apps Card (Cleanly padded)
         item {
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(18.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -450,13 +449,14 @@ fun DashboardScreen(
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(46.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.CloudUpload,
                                     contentDescription = "Backup",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -464,7 +464,7 @@ fun DashboardScreen(
                             Text(
                                 text = "Backup All Apps",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "$userAppsCount apps (APK, Data, Media, OBB, Logins, Perms)",
@@ -474,10 +474,12 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Scope toggles row
+                    // Horizontally scrollable Scope toggles row with clean spacing
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = settings.includeApk,
@@ -516,7 +518,7 @@ fun DashboardScreen(
                                 viewModel.backupBatch(context, targetApps)
                             },
                             enabled = currentOp == null && installedApps.isNotEmpty(),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
@@ -531,15 +533,17 @@ fun DashboardScreen(
             }
         }
 
-        // 4. Restore All Backed Up Apps Card (Swift Backup Full Scope)
+        // 4. Restore All Backed Up Apps Card (Cleanly padded)
         item {
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(18.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -549,13 +553,14 @@ fun DashboardScreen(
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(46.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Restore,
                                     contentDescription = "Restore",
-                                    tint = MaterialTheme.colorScheme.secondary
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -563,7 +568,7 @@ fun DashboardScreen(
                             Text(
                                 text = "Restore Backed Up Apps",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "${availableBackups.size} apps found on active storage",
@@ -586,7 +591,7 @@ fun DashboardScreen(
                                 viewModel.restoreBatch(context, availableBackups)
                             },
                             enabled = currentOp == null && availableBackups.isNotEmpty(),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                         ) {
                             Icon(
