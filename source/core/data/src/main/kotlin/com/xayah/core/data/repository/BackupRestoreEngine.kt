@@ -478,10 +478,12 @@ class BackupRestoreEngine @Inject constructor(
             }
 
             // 4. External Data (/sdcard/Android/data/<pkg>)
+            val d = "$"
             if (includeExtData && isRoot) {
                 val extPath = "/sdcard/Android/data/$packageName"
                 val destExtArchive = File(appDir, "external_data.tar.gz")
-                val cmd = "test -d '$extPath' && cd '$extPath' && (tar -czf '${destExtArchive.absolutePath}' . 2>/dev/null || tar -cf '${destExtArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destExtArchive.absolutePath}'"
+                val tmpStage = "/data/local/tmp/mbackup_ext_$packageName"
+                val cmd = "if [ -d '$extPath' ] && [ -n \"${d}(ls -A '$extPath' 2>/dev/null)\" ]; then rm -rf '$tmpStage' ; mkdir -p '$tmpStage' ; cp -a '$extPath/.' '$tmpStage/' 2>/dev/null ; rm -rf '$tmpStage/cache' ; if [ -n \"${d}(ls -A '$tmpStage' 2>/dev/null)\" ]; then (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null)) ; cp -f '$tmpStage.tar.gz' '${destExtArchive.absolutePath}' ; chmod 644 '${destExtArchive.absolutePath}' ; fi ; rm -rf '$tmpStage' '$tmpStage.tar.gz' ; fi"
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
 
@@ -490,7 +492,8 @@ class BackupRestoreEngine @Inject constructor(
                 onProgress(0.80f, "Backing up Media Files...")
                 val mediaPath = "/sdcard/Android/media/$packageName"
                 val destMediaArchive = File(appDir, "media.tar.gz")
-                val cmd = "test -d '$mediaPath' && cd '$mediaPath' && (tar -czf '${destMediaArchive.absolutePath}' . 2>/dev/null || tar -cf '${destMediaArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destMediaArchive.absolutePath}'"
+                val tmpStage = "/data/local/tmp/mbackup_media_$packageName"
+                val cmd = "if [ -d '$mediaPath' ] && [ -n \"${d}(ls -A '$mediaPath' 2>/dev/null)\" ]; then rm -rf '$tmpStage' ; mkdir -p '$tmpStage' ; cp -a '$mediaPath/.' '$tmpStage/' 2>/dev/null ; if [ -n \"${d}(ls -A '$tmpStage' 2>/dev/null)\" ]; then (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null)) ; cp -f '$tmpStage.tar.gz' '${destMediaArchive.absolutePath}' ; chmod 644 '${destMediaArchive.absolutePath}' ; fi ; rm -rf '$tmpStage' '$tmpStage.tar.gz' ; fi"
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
 
@@ -498,7 +501,8 @@ class BackupRestoreEngine @Inject constructor(
             if (includeObb && isRoot) {
                 val obbPath = "/sdcard/Android/obb/$packageName"
                 val destObbArchive = File(appDir, "obb.tar.gz")
-                val cmd = "test -d '$obbPath' && cd '$obbPath' && (tar -czf '${destObbArchive.absolutePath}' . 2>/dev/null || tar -cf '${destObbArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destObbArchive.absolutePath}'"
+                val tmpStage = "/data/local/tmp/mbackup_obb_$packageName"
+                val cmd = "if [ -d '$obbPath' ] && [ -n \"${d}(ls -A '$obbPath' 2>/dev/null)\" ]; then rm -rf '$tmpStage' ; mkdir -p '$tmpStage' ; cp -a '$obbPath/.' '$tmpStage/' 2>/dev/null ; if [ -n \"${d}(ls -A '$tmpStage' 2>/dev/null)\" ]; then (cd '$tmpStage' && (tar -czf '$tmpStage.tar.gz' . 2>/dev/null || tar -cf '$tmpStage.tar.gz' . 2>/dev/null)) ; cp -f '$tmpStage.tar.gz' '${destObbArchive.absolutePath}' ; chmod 644 '${destObbArchive.absolutePath}' ; fi ; rm -rf '$tmpStage' '$tmpStage.tar.gz' ; fi"
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
 
