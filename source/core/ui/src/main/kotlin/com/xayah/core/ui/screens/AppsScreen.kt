@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,6 +32,7 @@ fun AppsScreen(
     val availableBackups by viewModel.availableBackups.collectAsState()
     val isLoading by viewModel.isLoadingApps.collectAsState()
     val currentOp by viewModel.currentOperation.collectAsState()
+    val progress by viewModel.operationProgress.collectAsState()
 
     var activeTab by remember { mutableStateOf(0) } // 0: Backup (Installed), 1: Restore (Backups on Storage)
     var searchQuery by remember { mutableStateOf("") }
