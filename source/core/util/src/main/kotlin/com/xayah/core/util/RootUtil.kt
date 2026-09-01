@@ -125,11 +125,21 @@ object RootUtil {
 
     fun restoreAppSsaid(packageName: String, ssaid: String) {
         if (ssaid.isBlank()) return
-        val uid = getAppUid(packageName)?.first
-        if (uid != null) {
-            val cmd = "sed -i '/name=\"$packageName\"/!b;n;c\\    <setting id=\"$uid\" name=\"$packageName\" value=\"$ssaid\" package=\"$packageName\" />' /data/system/users/0/settings_ssaid.xml"
-            executeCommand(cmd, useRoot = true)
-        }
+        val uid = getAppUid(packageName)?.first ?: 10000
+        val xmlPath = "/data/system/users/0/settings_ssaid.xml"
+        val cmd = """
+            if [ -f '$xmlPath' ]; then
+                if grep -q 'name="$packageName"' '$xmlPath'; then
+                    sed -i 's/name="$packageName" value="[^"]*"/name="$packageName" value="$ssaid"/g' '$xmlPath'
+                else
+                    sed -i 's|</settings>|  <setting id="$uid" name="$packageName" value="$ssaid" package="$packageName" defaultValue="$ssaid" defaultSysSet="true" tag="null" />\n</settings>|' '$xmlPath'
+                fi
+                chmod 600 '$xmlPath'
+                chown system:system '$xmlPath'
+                pkill -f com.android.providers.settings || killall com.android.providers.settings 2>/dev/null
+            fi
+        """.trimIndent().replace("\n", " ; ")
+        executeCommand(cmd, useRoot = true)
     }
 
     fun getGrantedPermissions(packageName: String): List<String> {
