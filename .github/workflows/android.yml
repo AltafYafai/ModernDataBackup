@@ -64,6 +64,33 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
+      - name: Send APK to Telegram
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+            if [ -f "$APK_PATH" ]; then
+              FILE_NAME=$(basename "$APK_PATH")
+              CAPTION="🚀 <b>ModernDataBackup Build Success</b>%0A%0A📦 <b>APK:</b> <code>$FILE_NAME</code>%0A🔖 <b>Commit:</b> <code>${COMMIT_SHA:0:7}</code>%0A📝 <b>Message:</b> $(echo "$COMMIT_MSG" | head -n 1)%0A🔗 <a href=\"$RUN_URL\">View CI Action</a>"
+              echo "Uploading $FILE_NAME to Telegram..."
+              curl -s -F chat_id="$TELEGRAM_CHAT_ID" \
+                   -F document=@"$APK_PATH" \
+                   -F caption="$CAPTION" \
+                   -F parse_mode="HTML" \
+                   "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument"
+            else
+              echo "APK file not found"
+            fi
+          else
+            echo "Telegram credentials not provided, skipping"
+          fi
+
       - name: Upload Build Reports
         if: failure()
         uses: actions/upload-artifact@v4

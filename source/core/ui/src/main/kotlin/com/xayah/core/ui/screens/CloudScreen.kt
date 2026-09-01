@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +28,7 @@ fun CloudScreen(
     var hostInput by remember(serverHost) { mutableStateOf(serverHost) }
     var portInput by remember(serverPort) { mutableStateOf(serverPort) }
     var pathInput by remember(remotePath) { mutableStateOf(remotePath) }
-    var selectedProtocol by remember { mutableStateOf(0) } // 0: SMB, 1: SFTP, 2: WebDAV, 3: Local
+    var selectedProtocol by remember { mutableStateOf(0) } // 0: SMB, 1: SFTP, 2: WebDAV, 3: Telegram, 4: Local
 
     LazyColumn(
         modifier = Modifier
@@ -39,7 +40,7 @@ fun CloudScreen(
         // Cloud Provider Selection
         item {
             Text(
-                text = "Storage Medium",
+                text = "Storage Medium & Cloud Destination",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -48,17 +49,18 @@ fun CloudScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val protocols = listOf("SMB/CIFS", "SSH/SFTP", "WebDAV", "Local")
+                val protocols = listOf("SMB/CIFS", "SFTP", "WebDAV", "Telegram", "Local")
                 protocols.forEachIndexed { index, name ->
                     FilterChip(
                         selected = selectedProtocol == index,
                         onClick = {
                             selectedProtocol = index
-                            portInput = when (index) {
-                                0 -> "445"
-                                1 -> "22"
-                                2 -> "443"
-                                else -> "0"
+                            when (index) {
+                                0 -> { hostInput = "192.168.1.100"; portInput = "445"; pathInput = "/backups/android" }
+                                1 -> { hostInput = "backup.server.com"; portInput = "22"; pathInput = "/home/backups" }
+                                2 -> { hostInput = "dav.nextcloud.com"; portInput = "443"; pathInput = "/remote.php/webdav" }
+                                3 -> { hostInput = "api.telegram.org"; portInput = "443"; pathInput = "Bot Token & Chat ID" }
+                                4 -> { hostInput = "localhost"; portInput = "0"; pathInput = "/storage/emulated/0/ModernDataBackup" }
                             }
                         },
                         label = { Text(name) }
@@ -106,15 +108,15 @@ fun CloudScreen(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Remote Sync Status",
+                            text = if (selectedProtocol == 3) "Telegram Cloud Destination" else "Remote Sync Status",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = when (connResult) {
-                                true -> "Connected to $hostInput:$portInput"
-                                false -> "Connection Failed"
-                                else -> "Target: $hostInput:$portInput"
+                                true -> "Ready: $hostInput:$portInput"
+                                false -> "Connection Check Failed"
+                                else -> "Configured: $hostInput:$portInput"
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -145,37 +147,54 @@ fun CloudScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Server Configuration",
+                        text = if (selectedProtocol == 3) "Telegram Bot Configuration" else "Server Configuration",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
 
-                    OutlinedTextField(
-                        value = hostInput,
-                        onValueChange = { hostInput = it },
-                        label = { Text("Server Host / IP") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    if (selectedProtocol == 3) {
                         OutlinedTextField(
-                            value = portInput,
-                            onValueChange = { portInput = it },
-                            label = { Text("Port") },
-                            modifier = Modifier.weight(1f),
+                            value = hostInput,
+                            onValueChange = { hostInput = it },
+                            label = { Text("Telegram Bot Token (e.g. 123456:ABC...)") },
+                            modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
                         OutlinedTextField(
                             value = pathInput,
                             onValueChange = { pathInput = it },
-                            label = { Text("Remote Directory") },
-                            modifier = Modifier.weight(2f),
+                            label = { Text("Telegram Chat ID / Channel ID") },
+                            modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+                    } else {
+                        OutlinedTextField(
+                            value = hostInput,
+                            onValueChange = { hostInput = it },
+                            label = { Text("Server Host / IP") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = portInput,
+                                onValueChange = { portInput = it },
+                                label = { Text("Port") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = pathInput,
+                                onValueChange = { pathInput = it },
+                                label = { Text("Remote Directory") },
+                                modifier = Modifier.weight(2f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
                     }
 
                     Row(
@@ -188,7 +207,7 @@ fun CloudScreen(
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save Server")
+                            Text("Save Configuration")
                         }
                     }
                 }
