@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xayah.core.ui.component.DirectoryPickerDialog
 import com.xayah.core.ui.viewmodel.MainViewModel
 
 @Composable
@@ -24,7 +25,18 @@ fun SettingsScreen(
     val rootType by viewModel.rootType.collectAsState()
     val selinuxMode by viewModel.selinuxMode.collectAsState()
 
-    var backupPathInput by remember(settings.backupPath) { mutableStateOf(settings.backupPath) }
+    var showDirectoryPicker by remember { mutableStateOf(false) }
+
+    if (showDirectoryPicker) {
+        DirectoryPickerDialog(
+            initialPath = settings.backupPath,
+            onDismissRequest = { showDirectoryPicker = false },
+            onDirectorySelected = { selectedPath ->
+                viewModel.setCustomBackupPath(context, selectedPath)
+                showDirectoryPicker = false
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -52,16 +64,29 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    OutlinedTextField(
-                        value = backupPathInput,
-                        onValueChange = {
-                            backupPathInput = it
-                            viewModel.updateSettings(backupPath = it)
-                        },
-                        label = { Text("Backup Location") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = settings.backupPath,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Backup Destination") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        FilledTonalButton(
+                            onClick = { showDirectoryPicker = true },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Browse")
+                        }
+                    }
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(

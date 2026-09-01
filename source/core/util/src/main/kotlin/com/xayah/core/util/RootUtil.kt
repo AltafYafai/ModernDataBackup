@@ -84,7 +84,6 @@ object RootUtil {
                 if (uid != null && gid != null) return Pair(uid, gid)
             }
         }
-        // Fallback: parse from dumpsys
         val dumpRes = executeCommand("dumpsys package $packageName | grep userId=", useRoot = true)
         if (dumpRes.isSuccess && dumpRes.out.isNotEmpty()) {
             val line = dumpRes.out.first()
@@ -118,15 +117,19 @@ object RootUtil {
         val outLines = mutableListOf<String>()
         return try {
             val process = if (useRoot) {
-                ProcessBuilder("su").redirectErrorStream(true).start()
+                try {
+                    ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
+                } catch (e: Exception) {
+                    val p = ProcessBuilder("su").redirectErrorStream(true).start()
+                    DataOutputStream(p.outputStream).use { os ->
+                        os.writeBytes("$command\n")
+                        os.writeBytes("exit\n")
+                        os.flush()
+                    }
+                    p
+                }
             } else {
-                ProcessBuilder("sh").redirectErrorStream(true).start()
-            }
-
-            DataOutputStream(process.outputStream).use { os ->
-                os.writeBytes("$command\n")
-                os.writeBytes("exit\n")
-                os.flush()
+                ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start()
             }
 
             BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
@@ -137,8 +140,9 @@ object RootUtil {
             }
 
             val exitCode = process.waitFor()
+            // In unix/toybox tools (e.g. tar or cp), exit code 0 or 1 with non-critical warnings is common
             CommandResult(
-                isSuccess = exitCode == 0,
+                isSuccess = exitCode == 0 || exitCode == 1,
                 out = outLines,
                 code = exitCode
             )

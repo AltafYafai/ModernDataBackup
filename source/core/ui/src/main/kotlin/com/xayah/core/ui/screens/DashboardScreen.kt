@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xayah.core.ui.component.DirectoryPickerDialog
 import com.xayah.core.ui.viewmodel.MainViewModel
 import com.xayah.core.util.PathUtil
 import com.xayah.core.util.toDateString
@@ -42,21 +43,44 @@ fun DashboardScreen(
     val settings by viewModel.settings.collectAsState()
 
     var showStorageDialog by remember { mutableStateOf(false) }
-    var customPathInput by remember(settings.backupPath) { mutableStateOf(settings.backupPath) }
+    var showDirectoryPicker by remember { mutableStateOf(false) }
 
     val userAppsCount = installedApps.count { !it.isSystemApp }
     val systemAppsCount = installedApps.count { it.isSystemApp }
+
+    // Directory Browser / File Picker Dialog
+    if (showDirectoryPicker) {
+        DirectoryPickerDialog(
+            initialPath = settings.backupPath,
+            onDismissRequest = { showDirectoryPicker = false },
+            onDirectorySelected = { selectedPath ->
+                viewModel.setCustomBackupPath(context, selectedPath)
+                showDirectoryPicker = false
+                showStorageDialog = false
+            }
+        )
+    }
 
     // Storage Switcher Modal Dialog
     if (showStorageDialog) {
         AlertDialog(
             onDismissRequest = { showStorageDialog = false },
             title = {
-                Text(
-                    text = "Backup Storage Location",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FolderSpecial,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Backup Storage Location",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             },
             text = {
                 Column(
@@ -64,12 +88,12 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "Choose where backup data should be saved (Default: /sdcard/moderndatabackup):",
+                        text = "Select a storage destination or browse for any custom directory:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Detected Volumes
+                    // Detected Storage Presets
                     storageLocations.forEach { loc ->
                         val isCurrent = settings.backupPath == loc.path
                         Card(
@@ -120,41 +144,29 @@ fun DashboardScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    // Custom Directory Path Field
-                    OutlinedTextField(
-                        value = customPathInput,
-                        onValueChange = { customPathInput = it },
-                        label = { Text("Custom Directory Path") },
+                    // File Picker Menu Button
+                    OutlinedButton(
+                        onClick = { showDirectoryPicker = true },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                customPathInput = PathUtil.DEFAULT_BACKUP_PATH
-                                viewModel.setCustomBackupPath(context, PathUtil.DEFAULT_BACKUP_PATH)
-                                showStorageDialog = false
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Reset Default")
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.setCustomBackupPath(context, customPathInput)
-                                showStorageDialog = false
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Apply Path")
-                        }
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Browse Folders (File Picker Menu)")
+                    }
+
+                    // Reset Default Button
+                    FilledTonalButton(
+                        onClick = {
+                            viewModel.setCustomBackupPath(context, PathUtil.DEFAULT_BACKUP_PATH)
+                            showStorageDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Reset to Default (/sdcard/moderndatabackup)")
                     }
                 }
             },
@@ -238,18 +250,19 @@ fun DashboardScreen(
             }
         }
 
-        // 2. Storage Overview Card with Instant Switcher
+        // 2. Clickable Storage Card on Dashboard (Click to switch / pick directory)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                )
+                ),
+                onClick = { showStorageDialog = true }
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -258,50 +271,75 @@ fun DashboardScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.FolderSpecial,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.FolderSpecial,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                             Column {
                                 Text(
-                                    text = "Backup Storage Destination",
-                                    style = MaterialTheme.typography.titleSmall,
+                                    text = "Storage Destination",
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = storageInfo.path,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                        FilledTonalButton(
-                            onClick = { showStorageDialog = true },
-                            shape = RoundedCornerShape(10.dp)
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         ) {
-                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Switch")
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Change",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Storage Capacity",
+                                text = "Free Space: ${storageInfo.freeFormatted}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "${storageInfo.freeFormatted} Free / ${storageInfo.totalFormatted}",
+                                text = "Total: ${storageInfo.totalFormatted}",
                                 style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         LinearProgressIndicator(
