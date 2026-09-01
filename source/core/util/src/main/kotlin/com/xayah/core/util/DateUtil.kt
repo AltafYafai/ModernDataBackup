@@ -1,2 +1,12 @@
 package com.xayah.core.util
-fun Long.toDateString(): String = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(this))
+
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+object DateUtil {
+    fun format(timestamp: Long): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+}
+
+fun Long.toDateString(): String = DateUtil.format(this)
