@@ -3,10 +3,7 @@ package com.xayah.core.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.xayah.core.data.repository.AppsRepo
-import com.xayah.core.data.repository.BackupRestoreEngine
-import com.xayah.core.data.repository.StorageSpaceInfo
-import com.xayah.core.data.repository.TaskRepository
+import com.xayah.core.data.repository.*
 import com.xayah.core.database.entity.AppEntity
 import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.util.PathUtil
@@ -22,6 +19,10 @@ data class UiSettings(
     val compressionLevel: Float = 3f,
     val includeData: Boolean = true,
     val includeApk: Boolean = true,
+    val includeDeData: Boolean = true,
+    val includeExtData: Boolean = true,
+    val includeObb: Boolean = true,
+    val includePermissions: Boolean = true,
     val includeSystem: Boolean = false,
     val autoBackup: Boolean = false
 )
@@ -36,16 +37,28 @@ class MainViewModel @Inject constructor(
     private val _installedApps = MutableStateFlow<List<AppEntity>>(emptyList())
     val installedApps: StateFlow<List<AppEntity>> = _installedApps.asStateFlow()
 
+    private val _availableBackups = MutableStateFlow<List<BackupManifest>>(emptyList())
+    val availableBackups: StateFlow<List<BackupManifest>> = _availableBackups.asStateFlow()
+
+    private val _storageLocations = MutableStateFlow<List<StorageLocation>>(emptyList())
+    val storageLocations: StateFlow<List<StorageLocation>> = _storageLocations.asStateFlow()
+
     private val _isLoadingApps = MutableStateFlow(false)
     val isLoadingApps: StateFlow<Boolean> = _isLoadingApps.asStateFlow()
 
     private val _storageInfo = MutableStateFlow(
-        StorageSpaceInfo(32_000_000_000L, 128_000_000_000L, "32.0 GB", "128.0 GB", 0.75f)
+        StorageSpaceInfo(32_000_000_000L, 128_000_000_000L, "32.0 GB", "128.0 GB", 0.75f, "/storage/emulated/0/ModernDataBackup")
     )
     val storageInfo: StateFlow<StorageSpaceInfo> = _storageInfo.asStateFlow()
 
     private val _isRootGranted = MutableStateFlow(false)
     val isRootGranted: StateFlow<Boolean> = _isRootGranted.asStateFlow()
+
+    private val _rootType = MutableStateFlow("Detecting...")
+    val rootType: StateFlow<String> = _rootType.asStateFlow()
+
+    private val _selinuxMode = MutableStateFlow("Enforcing")
+    val selinuxMode: StateFlow<String> = _selinuxMode.asStateFlow()
 
     private val _history = MutableStateFlow<List<TaskEntity>>(emptyList())
     val history: StateFlow<List<TaskEntity>> = _history.asStateFlow()
@@ -80,25 +93,54 @@ class MainViewModel @Inject constructor(
 
     fun initData(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
+            refreshRootStatus()
+            val primaryDir = PathUtil.getPrimaryBackupDir(context).absolutePath
+            _settings.value = _settings.value.copy(backupPath = primaryDir)
+            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, primaryDir)
+            _storageLocations.value = backupRestoreEngine.getAvailableStorageLocations(context)
+            loadHistory()
+            scanInstalledApps(context)
+            loadAvailableBackups(context)
+        }
+    }
+
+    fun refreshRootStatus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val isRoot = RootUtil.isRootAvailable(forceCheck = true)
+            _isRootGranted.value = isRoot
+            _rootType.value = RootUtil.getRootType()
+            _selinuxMode.value = RootUtil.getSelinuxMode()
+        }
+    }
+
+    fun requestRootAccess() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val granted = RootUtil.requestRoot()
+            _isRootGranted.value = granted
+            _rootType.value = RootUtil.getRootType()
+            _selinuxMode.value = RootUtil.getSelinuxMode()
+            _snackbarMessage.value = if (granted) "Root access granted (${_rootType.value})!" else "Root permission denied"
+        }
+    }
+
+    fun switchStorage(context: Context, location: StorageLocation) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _settings.value = _settings.value.copy(backupPath = location.path)
+            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, location.path)
+            _snackbarMessage.value = "Storage switched to: ${location.name}"
+            loadAvailableBackups(context)
+            scanInstalledApps(context)
+        }
+    }
+
+    fun loadAvailableBackups(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                _isRootGranted.value = RootUtil.isRootAvailable()
+                val backups = backupRestoreEngine.getAvailableBackups(_settings.value.backupPath, context)
+                _availableBackups.value = backups
             } catch (t: Throwable) {
-                _isRootGranted.value = false
+                t.printStackTrace()
             }
-            try {
-                _storageInfo.value = backupRestoreEngine.getStorageSpace(context)
-            } catch (t: Throwable) { }
-            try {
-                _settings.value = _settings.value.copy(
-                    backupPath = PathUtil.getPrimaryBackupDir(context).absolutePath
-                )
-            } catch (t: Throwable) { }
-            try {
-                loadHistory()
-            } catch (t: Throwable) { }
-            try {
-                scanInstalledApps(context)
-            } catch (t: Throwable) { }
         }
     }
 
@@ -133,7 +175,7 @@ class MainViewModel @Inject constructor(
 
     fun backupSingle(context: Context, app: AppEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            _currentOperation.value = "Backing up ${app.label}..."
+            _currentOperation.value = "Backing up ${app.label} (APK + Data + Perms)..."
             _operationProgress.value = 0.3f
             val res = backupRestoreEngine.backupApp(
                 context = context,
@@ -141,6 +183,10 @@ class MainViewModel @Inject constructor(
                 label = app.label,
                 includeApk = _settings.value.includeApk,
                 includeData = _settings.value.includeData,
+                includeDeData = _settings.value.includeDeData,
+                includeExtData = _settings.value.includeExtData,
+                includeObb = _settings.value.includeObb,
+                includePermissions = _settings.value.includePermissions,
                 customBackupPath = _settings.value.backupPath
             )
             _operationProgress.value = 1f
@@ -155,28 +201,36 @@ class MainViewModel @Inject constructor(
                 _snackbarMessage.value = "Backup failed: ${res.exceptionOrNull()?.message}"
             }
             loadHistory()
-            _storageInfo.value = backupRestoreEngine.getStorageSpace(context)
+            loadAvailableBackups(context)
+            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, _settings.value.backupPath)
         }
     }
 
-    fun restoreSingle(context: Context, app: AppEntity) {
+    fun restoreSingle(context: Context, packageName: String, label: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            _currentOperation.value = "Restoring ${app.label}..."
+            _currentOperation.value = "Restoring $label (APK + Data + Perms)..."
             _operationProgress.value = 0.3f
             val res = backupRestoreEngine.restoreApp(
                 context = context,
-                packageName = app.packageName,
-                label = app.label,
+                packageName = packageName,
+                label = label,
+                restoreApk = _settings.value.includeApk,
+                restoreData = _settings.value.includeData,
+                restoreDeData = _settings.value.includeDeData,
+                restoreExtData = _settings.value.includeExtData,
+                restoreObb = _settings.value.includeObb,
+                restorePermissions = _settings.value.includePermissions,
                 customBackupPath = _settings.value.backupPath
             )
             _operationProgress.value = 1f
             _currentOperation.value = null
             if (res.isSuccess) {
-                _snackbarMessage.value = "Restored: ${app.label}"
+                _snackbarMessage.value = "Restored successfully: $label"
             } else {
                 _snackbarMessage.value = "Restore failed: ${res.exceptionOrNull()?.message}"
             }
             loadHistory()
+            scanInstalledApps(context)
         }
     }
 
@@ -194,6 +248,10 @@ class MainViewModel @Inject constructor(
                     label = app.label,
                     includeApk = _settings.value.includeApk,
                     includeData = _settings.value.includeData,
+                    includeDeData = _settings.value.includeDeData,
+                    includeExtData = _settings.value.includeExtData,
+                    includeObb = _settings.value.includeObb,
+                    includePermissions = _settings.value.includePermissions,
                     customBackupPath = _settings.value.backupPath
                 )
                 if (res.isSuccess) successCount++
@@ -202,8 +260,39 @@ class MainViewModel @Inject constructor(
             _operationProgress.value = 0f
             _snackbarMessage.value = "Batch backup complete: $successCount of $total apps backed up"
             scanInstalledApps(context)
+            loadAvailableBackups(context)
             loadHistory()
-            _storageInfo.value = backupRestoreEngine.getStorageSpace(context)
+            _storageInfo.value = backupRestoreEngine.getStorageSpace(context, _settings.value.backupPath)
+        }
+    }
+
+    fun restoreBatch(context: Context, backups: List<BackupManifest>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (backups.isEmpty()) return@launch
+            var successCount = 0
+            val total = backups.size
+            backups.forEachIndexed { index, backup ->
+                _currentOperation.value = "Restoring (${index + 1}/$total): ${backup.label}"
+                _operationProgress.value = (index.toFloat() / total.toFloat())
+                val res = backupRestoreEngine.restoreApp(
+                    context = context,
+                    packageName = backup.packageName,
+                    label = backup.label,
+                    restoreApk = _settings.value.includeApk,
+                    restoreData = _settings.value.includeData,
+                    restoreDeData = _settings.value.includeDeData,
+                    restoreExtData = _settings.value.includeExtData,
+                    restoreObb = _settings.value.includeObb,
+                    restorePermissions = _settings.value.includePermissions,
+                    customBackupPath = _settings.value.backupPath
+                )
+                if (res.isSuccess) successCount++
+            }
+            _currentOperation.value = null
+            _operationProgress.value = 0f
+            _snackbarMessage.value = "Batch restore complete: $successCount of $total apps restored"
+            scanInstalledApps(context)
+            loadHistory()
         }
     }
 
@@ -243,6 +332,10 @@ class MainViewModel @Inject constructor(
         compressionLevel: Float = _settings.value.compressionLevel,
         includeData: Boolean = _settings.value.includeData,
         includeApk: Boolean = _settings.value.includeApk,
+        includeDeData: Boolean = _settings.value.includeDeData,
+        includeExtData: Boolean = _settings.value.includeExtData,
+        includeObb: Boolean = _settings.value.includeObb,
+        includePermissions: Boolean = _settings.value.includePermissions,
         includeSystem: Boolean = _settings.value.includeSystem,
         autoBackup: Boolean = _settings.value.autoBackup,
         context: Context? = null
@@ -253,6 +346,10 @@ class MainViewModel @Inject constructor(
             compressionLevel = compressionLevel,
             includeData = includeData,
             includeApk = includeApk,
+            includeDeData = includeDeData,
+            includeExtData = includeExtData,
+            includeObb = includeObb,
+            includePermissions = includePermissions,
             includeSystem = includeSystem,
             autoBackup = autoBackup
         )

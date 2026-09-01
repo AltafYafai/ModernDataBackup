@@ -21,6 +21,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val isRoot by viewModel.isRootGranted.collectAsState()
+    val rootType by viewModel.rootType.collectAsState()
+    val selinuxMode by viewModel.selinuxMode.collectAsState()
 
     var backupPathInput by remember(settings.backupPath) { mutableStateOf(settings.backupPath) }
 
@@ -89,10 +91,10 @@ fun SettingsScreen(
             }
         }
 
-        // Scope Settings Section
+        // Scope Settings Section (Swift Backup style)
         item {
             Text(
-                text = "Backup Scope",
+                text = "Backup & Restore Scope",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -106,17 +108,38 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     SettingToggleRow(
-                        title = "Include Application Data",
-                        subtitle = "Back up databases, shared prefs, and internal files",
+                        title = "Include APK Files",
+                        subtitle = "Base APK and split configuration APKs",
+                        checked = settings.includeApk,
+                        onCheckedChange = { viewModel.updateSettings(includeApk = it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    SettingToggleRow(
+                        title = "Internal App Data (/data/data)",
+                        subtitle = "Databases, shared preferences, and private files",
                         checked = settings.includeData,
                         onCheckedChange = { viewModel.updateSettings(includeData = it) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     SettingToggleRow(
-                        title = "Include APK Files",
-                        subtitle = "Save base and split APK packages",
-                        checked = settings.includeApk,
-                        onCheckedChange = { viewModel.updateSettings(includeApk = it) }
+                        title = "Device Protected Data (/data/user_de)",
+                        subtitle = "Direct boot and encryption-aware storage",
+                        checked = settings.includeDeData,
+                        onCheckedChange = { viewModel.updateSettings(includeDeData = it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    SettingToggleRow(
+                        title = "External App Data & OBB",
+                        subtitle = "/sdcard/Android/data and expansion assets",
+                        checked = settings.includeExtData,
+                        onCheckedChange = { viewModel.updateSettings(includeExtData = it, includeObb = it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    SettingToggleRow(
+                        title = "Runtime Permissions",
+                        subtitle = "Save and auto-grant application runtime permissions",
+                        checked = settings.includePermissions,
+                        onCheckedChange = { viewModel.updateSettings(includePermissions = it) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     SettingToggleRow(
@@ -139,7 +162,7 @@ fun SettingsScreen(
         // App Info & Diagnostics
         item {
             Text(
-                text = "About & Diagnostics",
+                text = "Diagnostics & System",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -161,7 +184,7 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Version 1.0.0 (Material You 3)",
+                        text = "Version 1.0.0 (SwiftBackup-grade Root Engine)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -170,12 +193,24 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "Root Access", style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Root Engine", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            text = if (isRoot) "Granted" else "Not available (Standard Mode)",
+                            text = if (isRoot) rootType else "Not Rooted",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = "SELinux Status", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = selinuxMode,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     Row(

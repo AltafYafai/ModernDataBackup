@@ -1,6 +1,5 @@
 package com.xayah.core.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,9 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.ui.viewmodel.MainViewModel
-import com.xayah.core.util.DateUtil
 import com.xayah.core.util.toDateString
 
 @Composable
@@ -32,16 +29,97 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val installedApps by viewModel.installedApps.collectAsState()
+    val availableBackups by viewModel.availableBackups.collectAsState()
     val storageInfo by viewModel.storageInfo.collectAsState()
+    val storageLocations by viewModel.storageLocations.collectAsState()
     val isRoot by viewModel.isRootGranted.collectAsState()
+    val rootType by viewModel.rootType.collectAsState()
+    val selinuxMode by viewModel.selinuxMode.collectAsState()
     val history by viewModel.history.collectAsState()
     val currentOp by viewModel.currentOperation.collectAsState()
     val progress by viewModel.operationProgress.collectAsState()
     val settings by viewModel.settings.collectAsState()
 
+    var showStorageDialog by remember { mutableStateOf(false) }
+
     val userAppsCount = installedApps.count { !it.isSystemApp }
     val systemAppsCount = installedApps.count { it.isSystemApp }
-    val backedUpCount = installedApps.count { it.enabled }
+
+    // Storage Switcher Modal Dialog
+    if (showStorageDialog) {
+        AlertDialog(
+            onDismissRequest = { showStorageDialog = false },
+            title = {
+                Text(
+                    text = "Select Backup Storage",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Choose the storage destination for your backup archives:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    storageLocations.forEach { loc ->
+                        val isCurrent = settings.backupPath == loc.path
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            onClick = {
+                                viewModel.switchStorage(context, loc)
+                                showStorageDialog = false
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (loc.isRemovable) Icons.Default.SdCard else Icons.Default.Folder,
+                                    contentDescription = null,
+                                    tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = loc.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${loc.freeSpace} free • ${loc.path}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (isCurrent) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showStorageDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -50,72 +128,135 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // System / Storage Overview Card
+        // 1. Prominent Root Status Card at the Home Page Top
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = if (isRoot) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isRoot) Icons.Default.Security else Icons.Default.WarningAmber,
+                                contentDescription = "Root Status",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = if (isRoot) "Root Access: Granted" else "Root Access: Not Granted",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRoot) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        Text(
+                            text = if (isRoot) "Engine: $rootType • SELinux: $selinuxMode" else "Standard mode. Tap below to grant SU permissions.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isRoot) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                    if (!isRoot) {
+                        Button(
+                            onClick = { viewModel.requestRootAccess() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Grant SU")
+                        }
+                    } else {
+                        IconButton(onClick = { viewModel.refreshRootStatus() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Root")
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Storage Overview Card with Instant Switcher
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                text = "System Status",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (isRoot) "Root Access: Granted • ZSTD Native" else "Standard Mode • ZSTD Native",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(36.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isRoot) Icons.Default.CheckCircle else Icons.Default.Info,
-                                    contentDescription = "Status",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(20.dp)
+                            Icon(
+                                imageVector = Icons.Default.FolderSpecial,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = "Active Backup Destination",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = storageInfo.path,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
+                        FilledTonalButton(
+                            onClick = { showStorageDialog = true },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Switch")
+                        }
                     }
 
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f)
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Internal Storage",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                text = "Storage Capacity",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = "${storageInfo.freeFormatted} Free / ${storageInfo.totalFormatted}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                         LinearProgressIndicator(
@@ -125,7 +266,7 @@ fun DashboardScreen(
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            trackColor = MaterialTheme.colorScheme.surface
                         )
                     }
                 }
@@ -190,25 +331,25 @@ fun DashboardScreen(
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = "Backed Up",
-                    count = "$backedUpCount",
-                    subtitle = "${history.size} total operations",
+                    count = "${availableBackups.size}",
+                    subtitle = "${availableBackups.size} apps ready to restore",
                     icon = Icons.Default.Backup,
-                    onClick = onNavigateToHistory
+                    onClick = onNavigateToApps
                 )
             }
         }
 
-        // Action Cards Header
+        // Swift Backup-style Action Cards Header
         item {
             Text(
-                text = "Quick Actions",
+                text = "Operations",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
 
-        // Backup All User Apps Card
+        // 3. Backup All User Apps Card (Swift Backup Full Scope)
         item {
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -238,35 +379,49 @@ fun DashboardScreen(
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Backup All User Apps",
+                                text = "Backup All Apps",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "$userAppsCount apps selected (APK + Data)",
+                                text = "$userAppsCount apps (APK, Data, DE Data, OBB, Perms)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
+                    // Scope toggles row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = settings.includeData,
-                                onClick = { viewModel.updateSettings(includeData = !settings.includeData) },
-                                label = { Text("App Data") }
-                            )
-                            FilterChip(
-                                selected = settings.includeApk,
-                                onClick = { viewModel.updateSettings(includeApk = !settings.includeApk) },
-                                label = { Text("APK") }
-                            )
-                        }
+                        FilterChip(
+                            selected = settings.includeApk,
+                            onClick = { viewModel.updateSettings(includeApk = !settings.includeApk) },
+                            label = { Text("APK") }
+                        )
+                        FilterChip(
+                            selected = settings.includeData,
+                            onClick = { viewModel.updateSettings(includeData = !settings.includeData) },
+                            label = { Text("Data") }
+                        )
+                        FilterChip(
+                            selected = settings.includeDeData,
+                            onClick = { viewModel.updateSettings(includeDeData = !settings.includeDeData) },
+                            label = { Text("DE Data") }
+                        )
+                        FilterChip(
+                            selected = settings.includePermissions,
+                            onClick = { viewModel.updateSettings(includePermissions = !settings.includePermissions) },
+                            label = { Text("Perms") }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         Button(
                             onClick = {
                                 val targetApps = installedApps.filter { !it.isSystemApp }
@@ -281,73 +436,117 @@ fun DashboardScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Start Backup")
+                            Text(text = "Start Backup ($userAppsCount)")
                         }
                     }
                 }
             }
         }
 
-        // Restore & Cloud Sync Row
+        // 4. Restore All Backed Up Apps Card (Swift Backup Full Scope)
         item {
-            Row(
+            ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                OutlinedCard(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = onNavigateToHistory
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Restore,
-                            contentDescription = "Restore",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Text(
-                            text = "Restore Data",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "From local or cloud",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Restore,
+                                    contentDescription = "Restore",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Restore Backed Up Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${availableBackups.size} apps found on active storage",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = onNavigateToApps) {
+                            Text("Select Individual Apps")
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.restoreBatch(context, availableBackups)
+                            },
+                            enabled = currentOp == null && availableBackups.isNotEmpty(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Restore All (${availableBackups.size})")
+                        }
                     }
                 }
+            }
+        }
 
-                OutlinedCard(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = onNavigateToCloud
+        // Cloud Sync Row
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                onClick = onNavigateToCloud
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = "Cloud Sync",
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(28.dp)
-                        )
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = "Cloud Sync",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Cloud Sync",
+                            text = "Cloud & Telegram Sync",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "SMB • SSH • WebDAV",
+                            text = "SMB • SFTP • WebDAV • Telegram Bot API",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
             }
         }
