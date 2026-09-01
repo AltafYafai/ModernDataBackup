@@ -5,7 +5,8 @@ class LibraryCommonConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) { with(target) {
         plugins.apply("com.android.library")
         plugins.apply("org.jetbrains.kotlin.android")
-        val ns = "com.xayah." + path.removePrefix(":").replace(":", ".").replace("-", "")
+        val rawNs = path.removePrefix(":").replace(":", ".").replace("-", "")
+        val ns = if (rawNs == "native") "com.xayah.modernnative" else "com.xayah.$rawNs"
         extensions.configure(com.android.build.api.dsl.LibraryExtension::class.java) {
             namespace = ns
             compileSdk = 35
