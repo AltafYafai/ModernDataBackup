@@ -74,27 +74,44 @@ object RootUtil {
     }
 
     fun getAppUid(packageName: String): Pair<Int, Int>? {
-        val cmd = "stat -c '%u:%g' /data/data/$packageName"
-        val res = executeCommand(cmd, useRoot = true)
+        // Strategy 1: dumpsys package <pkg>
+        val dumpRes = executeCommand("dumpsys package $packageName | grep -E 'userId=|appId='", useRoot = true)
+        if (dumpRes.isSuccess && dumpRes.out.isNotEmpty()) {
+            for (line in dumpRes.out) {
+                val cleaned = line.trim()
+                val uidStr = if (cleaned.contains("userId=")) cleaned.substringAfter("userId=").substringBefore(" ")
+                else if (cleaned.contains("appId=")) cleaned.substringAfter("appId=").substringBefore(" ")
+                else ""
+                val uid = uidStr.trim().toIntOrNull()
+                if (uid != null && uid > 0) return Pair(uid, uid)
+            }
+        }
+
+        // Strategy 2: stat -c '%u:%g' /data/data/$packageName
+        val res = executeCommand("stat -c '%u:%g' /data/data/$packageName", useRoot = true)
         if (res.isSuccess && res.out.isNotEmpty()) {
             val parts = res.out.first().trim().split(":")
             if (parts.size == 2) {
                 val uid = parts[0].toIntOrNull()
                 val gid = parts[1].toIntOrNull()
-                if (uid != null && gid != null) return Pair(uid, gid)
+                if (uid != null && gid != null && uid > 0) return Pair(uid, gid)
             }
         }
-        val dumpRes = executeCommand("dumpsys package $packageName | grep userId=", useRoot = true)
-        if (dumpRes.isSuccess && dumpRes.out.isNotEmpty()) {
-            val line = dumpRes.out.first()
-            val uid = line.substringAfter("userId=").substringBefore(" ").toIntOrNull()
-            if (uid != null) return Pair(uid, uid)
+
+        // Strategy 3: ls -nd /data/data/$packageName
+        val lsRes = executeCommand("ls -nd /data/data/$packageName", useRoot = true)
+        if (lsRes.isSuccess && lsRes.out.isNotEmpty()) {
+            val tokens = lsRes.out.first().split("\\s+".toRegex())
+            val uid = tokens.getOrNull(2)?.toIntOrNull()
+            val gid = tokens.getOrNull(3)?.toIntOrNull()
+            if (uid != null && gid != null && uid > 0) return Pair(uid, gid)
         }
+
         return null
     }
 
     fun getAppSsaid(packageName: String): String? {
-        val cmd = "grep -B 1 '$packageName' /data/system/users/0/settings_ssaid.xml | grep 'value=' | sed 's/.*value=\"//;s/\".*//'"
+        val cmd = "grep -B 1 '$packageName' /data/system/users/0/settings_ssaid.xml 2>/dev/null | grep 'value=' | sed 's/.*value=\"//;s/\".*//'"
         val res = executeCommand(cmd, useRoot = true)
         if (res.isSuccess && res.out.isNotEmpty() && res.out.first().isNotBlank()) {
             return res.out.first().trim()

@@ -426,12 +426,15 @@ class BackupRestoreEngine @Inject constructor(
                 }
             }
 
-            // 2. Internal Data Backup (/data/data/<pkg> - databases, shared_prefs, files, auth tokens, session cookies)
+            // 2. Internal Data Backup (/data/data/<pkg>)
             if (includeData) {
                 val dataPath = appInfo.dataDir ?: "/data/data/$packageName"
                 val destArchive = File(appDir, "data.tar.gz")
                 if (isRoot) {
-                    val cmd = "cd '$dataPath' && (tar -czf '${destArchive.absolutePath}' . 2>/dev/null || (tar -cf - . | gzip > '${destArchive.absolutePath}') 2>/dev/null || tar -cf '${destArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destArchive.absolutePath}'"
+                    val cmd = """
+                        cd '$dataPath' && (tar -czf '${destArchive.absolutePath}' . 2>/dev/null || (tar -cf - . | gzip > '${destArchive.absolutePath}') 2>/dev/null || tar -cf '${destArchive.absolutePath}' . 2>/dev/null)
+                        chmod 644 '${destArchive.absolutePath}'
+                    """.trimIndent().replace("\n", " ; ")
                     RootUtil.executeCommand(cmd, useRoot = true)
                 } else {
                     val extData = File(Environment.getExternalStorageDirectory(), "Android/data/$packageName")
@@ -442,7 +445,7 @@ class BackupRestoreEngine @Inject constructor(
                 }
             }
 
-            // 3. Device Protected Data (/data/user_de/0/<pkg> - encryption & direct boot logins)
+            // 3. Device Protected Data (/data/user_de/0/<pkg>)
             if (includeDeData && isRoot) {
                 val dePath = "/data/user_de/0/$packageName"
                 val destDeArchive = File(appDir, "data_de.tar.gz")
@@ -458,7 +461,7 @@ class BackupRestoreEngine @Inject constructor(
                 RootUtil.executeCommand(cmd, useRoot = true)
             }
 
-            // 5. Multimedia & Media Files (/sdcard/Android/media/<pkg> - WhatsApp, Telegram, photos, audio, videos)
+            // 5. Multimedia & Media Files (/sdcard/Android/media/<pkg>)
             if (includeMedia && isRoot) {
                 val mediaPath = "/sdcard/Android/media/$packageName"
                 val destMediaArchive = File(appDir, "media.tar.gz")
@@ -505,7 +508,7 @@ class BackupRestoreEngine @Inject constructor(
                 backupPath = appDir.absolutePath,
                 isBackup = true
             )
-            taskDao.insert(task)
+            try { taskDao.insert(task) } catch (e: Exception) { e.printStackTrace() }
 
             Result.success("Full backup complete: $label")
         } catch (e: Exception) {
@@ -517,7 +520,7 @@ class BackupRestoreEngine @Inject constructor(
                 backupPath = "",
                 isBackup = true
             )
-            taskDao.insert(failedTask)
+            try { taskDao.insert(failedTask) } catch (ignored: Exception) {}
             Result.failure(e)
         }
     }
@@ -554,25 +557,51 @@ class BackupRestoreEngine @Inject constructor(
             }
 
             if (isRoot) {
-                try {
-                    RootUtil.forceStopApp(packageName)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                try { RootUtil.forceStopApp(packageName) } catch (e: Exception) { e.printStackTrace() }
             }
 
-            // 1. Restore APK (Multi-Split / Base)
+            // 1. Restore APK (Multi-Split / Base) via /data/local/tmp staging for SELinux / installd compatibility
             if (restoreApk && isRoot) {
                 val apkNames = dirFiles.filter { it.endsWith(".apk") }
-                if (apkNames.size > 1) {
-                    val apkListStr = apkNames.joinToString(" ") { "'${appDir.absolutePath}/$it'" }
-                    RootUtil.executeCommand("pm install-multiple -r -d $apkListStr", useRoot = true)
-                } else if (apkNames.isNotEmpty()) {
-                    RootUtil.executeCommand("pm install -r -d '${appDir.absolutePath}/${apkNames.first()}'", useRoot = true)
+                if (apkNames.isNotEmpty()) {
+                    val tmpDir = "/data/local/tmp/mbackup_install_$packageName"
+                    RootUtil.executeCommand("rm -rf $tmpDir && mkdir -p $tmpDir && chmod 777 $tmpDir", useRoot = true)
+                    apkNames.forEach { apk ->
+                        RootUtil.executeCommand("cp -f '${appDir.absolutePath}/$apk' '$tmpDir/$apk' && chmod 777 '$tmpDir/$apk'", useRoot = true)
+                    }
+
+                    if (apkNames.size == 1) {
+                        RootUtil.executeCommand("pm install -r -d -g '$tmpDir/${apkNames.first()}'", useRoot = true)
+                    } else {
+                        val apkPaths = apkNames.map { "'$tmpDir/$it'" }.joinToString(" ")
+                        val multiRes = RootUtil.executeCommand("pm install-multiple -r -d -g $apkPaths", useRoot = true)
+                        if (!multiRes.isSuccess) {
+                            // Fallback: Session Install API
+                            val sessionScript = """
+                                SID=$$(pm install-create -r -d -g 2>/dev/null | grep -o '[0-9]*' | tail -n1)
+                                if [ -n "$$SID" ]; then
+                                    for f in $tmpDir/*.apk; do
+                                        SZ=$$(stat -c%s "$$f")
+                                        BN=$$(basename "$$f")
+                                        pm install-write -S $$SZ $$SID "$$BN" "$$f"
+                                    done
+                                    pm install-commit $$SID
+                                fi
+                            """.trimIndent().replace("\n", " ; ")
+                            RootUtil.executeCommand(sessionScript, useRoot = true)
+                        }
+                    }
+                    RootUtil.executeCommand("rm -rf $tmpDir", useRoot = true)
                 }
             }
 
-            // 2. Restore Internal App Data & Logins
+            // 2. Query UID assigned by the OS
+            if (isRoot) {
+                try { RootUtil.forceStopApp(packageName) } catch (e: Exception) { e.printStackTrace() }
+            }
+            val uidGid = if (isRoot) RootUtil.getAppUid(packageName) else null
+
+            // 3. Restore Internal App Data & Logins with exact UID ownership
             if (restoreData && isRoot) {
                 val dataTar = if (dirFiles.contains("data.tar.gz")) "${appDir.absolutePath}/data.tar.gz"
                 else if (dirFiles.contains("data.tar")) "${appDir.absolutePath}/data.tar"
@@ -580,63 +609,89 @@ class BackupRestoreEngine @Inject constructor(
 
                 if (dataTar != null) {
                     val dataPath = "/data/data/$packageName"
-                    val cmd = "mkdir -p '$dataPath' && cd '$dataPath' && (tar -xzf '$dataTar' 2>/dev/null || (gzip -dc '$dataTar' | tar -xf -) 2>/dev/null || tar -xf '$dataTar' 2>/dev/null)"
+                    val tmpDataTar = "/data/local/tmp/restore_data_$packageName.tar.gz"
+                    val cmd = """
+                        mkdir -p '$dataPath'
+                        cp -f '$dataTar' '$tmpDataTar'
+                        cd '$dataPath' && (tar -xzf '$tmpDataTar' 2>/dev/null || (gzip -dc '$tmpDataTar' | tar -xf -) 2>/dev/null || tar -xf '$tmpDataTar' 2>/dev/null)
+                        rm -f '$tmpDataTar'
+                    """.trimIndent().replace("\n", " ; ")
                     RootUtil.executeCommand(cmd, useRoot = true)
-                    val uidGid = RootUtil.getAppUid(packageName)
+
                     if (uidGid != null) {
-                        RootUtil.executeCommand("chown -R ${uidGid.first}:${uidGid.second} '$dataPath'", useRoot = true)
+                        RootUtil.executeCommand("chown -R ${uidGid.first}:${uidGid.second} '$dataPath' && chmod -R 700 '$dataPath'", useRoot = true)
                     }
                     RootUtil.executeCommand("restorecon -R '$dataPath'", useRoot = true)
                 }
             }
 
-            // 3. Restore Device Protected Data (DE Data)
+            // 4. Restore Device Protected Data (DE Data)
             if (restoreDeData && isRoot) {
                 val deTar = "${appDir.absolutePath}/data_de.tar.gz"
                 val dePath = "/data/user_de/0/$packageName"
-                RootUtil.executeCommand("test -f '$deTar' && mkdir -p '$dePath' && cd '$dePath' && (tar -xzf '$deTar' 2>/dev/null || tar -xf '$deTar' 2>/dev/null)", useRoot = true)
-                val uidGid = RootUtil.getAppUid(packageName)
+                val tmpDeTar = "/data/local/tmp/restore_de_$packageName.tar.gz"
+                val cmd = """
+                    test -f '$deTar' && mkdir -p '$dePath' && cp -f '$deTar' '$tmpDeTar' && cd '$dePath' && (tar -xzf '$tmpDeTar' 2>/dev/null || tar -xf '$tmpDeTar' 2>/dev/null)
+                    rm -f '$tmpDeTar'
+                """.trimIndent().replace("\n", " ; ")
+                RootUtil.executeCommand(cmd, useRoot = true)
+
                 if (uidGid != null) {
                     RootUtil.executeCommand("chown -R ${uidGid.first}:${uidGid.second} '$dePath'", useRoot = true)
                 }
                 RootUtil.executeCommand("restorecon -R '$dePath'", useRoot = true)
             }
 
-            // 4. Restore External Data
+            // 5. Restore External Data
             if (restoreExtData && isRoot) {
                 val extTar = "${appDir.absolutePath}/external_data.tar.gz"
                 val extPath = "/sdcard/Android/data/$packageName"
-                RootUtil.executeCommand("test -f '$extTar' && mkdir -p '$extPath' && cd '$extPath' && (tar -xzf '$extTar' 2>/dev/null || tar -xf '$extTar' 2>/dev/null)", useRoot = true)
+                val tmpExtTar = "/data/local/tmp/restore_ext_$packageName.tar.gz"
+                val cmd = """
+                    test -f '$extTar' && mkdir -p '$extPath' && cp -f '$extTar' '$tmpExtTar' && cd '$extPath' && (tar -xzf '$tmpExtTar' 2>/dev/null || tar -xf '$tmpExtTar' 2>/dev/null)
+                    rm -f '$tmpExtTar'
+                """.trimIndent().replace("\n", " ; ")
+                RootUtil.executeCommand(cmd, useRoot = true)
             }
 
-            // 5. Restore Multimedia Files (/sdcard/Android/media/<pkg>)
+            // 6. Restore Multimedia Files (/sdcard/Android/media/<pkg>)
             if (restoreMedia && isRoot) {
                 val mediaTar = "${appDir.absolutePath}/media.tar.gz"
                 val mediaPath = "/sdcard/Android/media/$packageName"
-                RootUtil.executeCommand("test -f '$mediaTar' && mkdir -p '$mediaPath' && cd '$mediaPath' && (tar -xzf '$mediaTar' 2>/dev/null || tar -xf '$mediaTar' 2>/dev/null)", useRoot = true)
+                val tmpMediaTar = "/data/local/tmp/restore_media_$packageName.tar.gz"
+                val cmd = """
+                    test -f '$mediaTar' && mkdir -p '$mediaPath' && cp -f '$mediaTar' '$tmpMediaTar' && cd '$mediaPath' && (tar -xzf '$tmpMediaTar' 2>/dev/null || tar -xf '$tmpMediaTar' 2>/dev/null)
+                    rm -f '$tmpMediaTar'
+                """.trimIndent().replace("\n", " ; ")
+                RootUtil.executeCommand(cmd, useRoot = true)
             }
 
-            // 6. Restore OBB Expansion Files
+            // 7. Restore OBB Expansion Files
             if (restoreObb && isRoot) {
                 val obbTar = "${appDir.absolutePath}/obb.tar.gz"
                 val obbPath = "/sdcard/Android/obb/$packageName"
-                RootUtil.executeCommand("test -f '$obbTar' && mkdir -p '$obbPath' && cd '$obbPath' && (tar -xzf '$obbTar' 2>/dev/null || tar -xf '$obbTar' 2>/dev/null)", useRoot = true)
+                val tmpObbTar = "/data/local/tmp/restore_obb_$packageName.tar.gz"
+                val cmd = """
+                    test -f '$obbTar' && mkdir -p '$obbPath' && cp -f '$obbTar' '$tmpObbTar' && cd '$obbPath' && (tar -xzf '$tmpObbTar' 2>/dev/null || tar -xf '$tmpObbTar' 2>/dev/null)
+                    rm -f '$tmpObbTar'
+                """.trimIndent().replace("\n", " ; ")
+                RootUtil.executeCommand(cmd, useRoot = true)
             }
 
-            // 7. Restore SSAID / Device Login Identity
+            // 8. Restore SSAID / Device Login Identity
             if (restoreSsaid && isRoot) {
                 val ssaidFile = "${appDir.absolutePath}/ssaid.txt"
-                val readRes = RootUtil.executeCommand("cat '$ssaidFile'", useRoot = true)
+                val readRes = RootUtil.executeCommand("cat '$ssaidFile' 2>/dev/null", useRoot = true)
                 if (readRes.isSuccess && readRes.out.isNotEmpty()) {
                     val ssaid = readRes.out.first().trim()
                     RootUtil.restoreAppSsaid(packageName, ssaid)
                 }
             }
 
-            // 8. Restore Runtime Permissions & AppOps
+            // 9. Restore Runtime Permissions & AppOps
             if (restorePermissions && isRoot) {
                 val permFile = "${appDir.absolutePath}/permissions.txt"
-                val readRes = RootUtil.executeCommand("cat '$permFile'", useRoot = true)
+                val readRes = RootUtil.executeCommand("cat '$permFile' 2>/dev/null", useRoot = true)
                 if (readRes.isSuccess) {
                     readRes.out.forEach { perm ->
                         if (perm.isNotBlank() && perm.startsWith("android.permission.")) {
@@ -646,7 +701,7 @@ class BackupRestoreEngine @Inject constructor(
                 }
 
                 val opsFile = "${appDir.absolutePath}/appops.txt"
-                val readOps = RootUtil.executeCommand("cat '$opsFile'", useRoot = true)
+                val readOps = RootUtil.executeCommand("cat '$opsFile' 2>/dev/null", useRoot = true)
                 if (readOps.isSuccess) {
                     readOps.out.forEach { opLine ->
                         RootUtil.restoreAppOp(packageName, opLine)
@@ -662,7 +717,7 @@ class BackupRestoreEngine @Inject constructor(
                 backupPath = appDir.absolutePath,
                 isBackup = false
             )
-            taskDao.insert(task)
+            try { taskDao.insert(task) } catch (e: Exception) { e.printStackTrace() }
 
             Result.success("Full restore complete: $label")
         } catch (e: Exception) {
@@ -674,7 +729,7 @@ class BackupRestoreEngine @Inject constructor(
                 backupPath = "",
                 isBackup = false
             )
-            taskDao.insert(failedTask)
+            try { taskDao.insert(failedTask) } catch (ignored: Exception) {}
             Result.failure(e)
         }
     }
