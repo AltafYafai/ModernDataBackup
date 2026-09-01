@@ -15,3 +15,15 @@ plugins {
     alias(libs.plugins.application.hilt) apply false
     alias(libs.plugins.application.hilt.work) apply false
 }
+
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            eachDependency {
+                if (requested.group == "org.bouncycastle") {
+                    useVersion("1.78.1")
+                }
+            }
+        }
+    }
+}
