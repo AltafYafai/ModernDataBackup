@@ -1,7 +1,12 @@
-plugins { alias(libs.plugins.library.common) }
+plugins {
+    alias(libs.plugins.library.common)
+    alias(libs.plugins.library.hilt)
+    alias(libs.plugins.ksp)
+}
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
     implementation(libs.libsu.core)
     implementation(libs.zip4j)
     implementation(project(":core:model"))

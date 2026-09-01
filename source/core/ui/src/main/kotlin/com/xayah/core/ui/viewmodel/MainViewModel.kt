@@ -2,11 +2,14 @@ package com.xayah.core.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.room.Room
 import com.xayah.core.data.repository.AppsRepo
 import com.xayah.core.data.repository.BackupRestoreEngine
 import com.xayah.core.data.repository.StorageSpaceInfo
 import com.xayah.core.data.repository.TaskRepository
+import com.xayah.core.database.AppDatabase
 import com.xayah.core.database.entity.AppEntity
 import com.xayah.core.database.entity.TaskEntity
 import com.xayah.core.util.PathUtil
@@ -25,6 +28,23 @@ data class UiSettings(
     val includeSystem: Boolean = false,
     val autoBackup: Boolean = false
 )
+
+class MainViewModelFactory(
+    private val context: Context
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val db = Room.databaseBuilder(
+            context.applicationContext,
+            AppDatabase::class.java,
+            "databackup.db"
+        ).fallbackToDestructiveMigration().build()
+        val appsRepo = AppsRepo(db.appDao())
+        val taskRepo = TaskRepository(db.taskDao())
+        val engine = BackupRestoreEngine(db.taskDao())
+        return MainViewModel(appsRepo, engine, taskRepo) as T
+    }
+}
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -80,13 +100,25 @@ class MainViewModel @Inject constructor(
 
     fun initData(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            _isRootGranted.value = RootUtil.isRootAvailable()
-            _storageInfo.value = backupRestoreEngine.getStorageSpace(context)
-            _settings.value = _settings.value.copy(
-                backupPath = PathUtil.getPrimaryBackupDir(context).absolutePath
-            )
-            loadHistory()
-            scanInstalledApps(context)
+            try {
+                _isRootGranted.value = RootUtil.isRootAvailable()
+            } catch (t: Throwable) {
+                _isRootGranted.value = false
+            }
+            try {
+                _storageInfo.value = backupRestoreEngine.getStorageSpace(context)
+            } catch (t: Throwable) { }
+            try {
+                _settings.value = _settings.value.copy(
+                    backupPath = PathUtil.getPrimaryBackupDir(context).absolutePath
+                )
+            } catch (t: Throwable) { }
+            try {
+                loadHistory()
+            } catch (t: Throwable) { }
+            try {
+                scanInstalledApps(context)
+            } catch (t: Throwable) { }
         }
     }
 
@@ -109,8 +141,12 @@ class MainViewModel @Inject constructor(
 
     fun loadHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            taskRepository.getAllTasks().collect { list ->
-                _history.value = list
+            try {
+                taskRepository.getAllTasks().collect { list ->
+                    _history.value = list
+                }
+            } catch (t: Throwable) {
+                t.printStackTrace()
             }
         }
     }
@@ -131,7 +167,6 @@ class MainViewModel @Inject constructor(
             _currentOperation.value = null
             if (res.isSuccess) {
                 _snackbarMessage.value = "Backup completed: ${app.label}"
-                // Refresh app enabled state in list
                 val updated = _installedApps.value.map {
                     if (it.packageName == app.packageName) it.copy(enabled = true) else it
                 }
@@ -208,14 +243,18 @@ class MainViewModel @Inject constructor(
         _serverHost.value = host
         _serverPort.value = port
         _remotePath.value = path
-        _snackbarMessage.value = "Server configuration saved"
+        _snackbarMessage.value = "Configuration saved"
     }
 
     fun clearHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            taskRepository.clearAll()
-            _history.value = emptyList()
-            _snackbarMessage.value = "History cleared"
+            try {
+                taskRepository.clearAll()
+                _history.value = emptyList()
+                _snackbarMessage.value = "History cleared"
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
         }
     }
 

@@ -15,8 +15,16 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
-        enableEdgeToEdge()
+        try {
+            installSplashScreen()
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
+        try {
+            enableEdgeToEdge()
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
         super.onCreate(savedInstanceState)
         setContent {
             DataBackupTheme {

@@ -9,8 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xayah.core.ui.viewmodel.MainViewModel
+import com.xayah.core.ui.viewmodel.MainViewModelFactory
 
 sealed class NavTab(
     val title: String,
@@ -27,7 +28,7 @@ sealed class NavTab(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(
-    viewModel: MainViewModel = hiltViewModel()
+    viewModel: MainViewModel = viewModel(factory = MainViewModelFactory(LocalContext.current))
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf<NavTab>(NavTab.Dashboard) }

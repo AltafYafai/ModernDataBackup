@@ -13,7 +13,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
-        Room.databaseBuilder(ctx, AppDatabase::class.java, "databackup.db").build()
+        Room.databaseBuilder(ctx, AppDatabase::class.java, "databackup.db")
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides fun provideTaskDao(db: AppDatabase) = db.taskDao()
     @Provides fun provideAppDao(db: AppDatabase) = db.appDao()
