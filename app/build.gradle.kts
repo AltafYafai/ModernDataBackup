@@ -3,6 +3,13 @@ android {
     namespace = "com.xayah.moderndatabackup"; compileSdk = 35
     defaultConfig { applicationId = "com.xayah.moderndatabackup"; minSdk = 24; targetSdk = 35; versionCode = 1000000; versionName = "1.0.0" }
     buildTypes { getByName("release") { isMinifyEnabled = false } }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            excludes += "META-INF/INDEX.LIST"
+        }
+    }
 }
 dependencies {
     implementation(project(":core:common")); implementation(project(":core:ui")); implementation(project(":core:model"))
