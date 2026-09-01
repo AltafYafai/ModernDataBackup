@@ -577,17 +577,8 @@ class BackupRestoreEngine @Inject constructor(
                         val multiRes = RootUtil.executeCommand("pm install-multiple -r -d -g $apkPaths", useRoot = true)
                         if (!multiRes.isSuccess) {
                             // Fallback: Session Install API
-                            val sessionScript = """
-                                SID=$$(pm install-create -r -d -g 2>/dev/null | grep -o '[0-9]*' | tail -n1)
-                                if [ -n "$$SID" ]; then
-                                    for f in $tmpDir/*.apk; do
-                                        SZ=$$(stat -c%s "$$f")
-                                        BN=$$(basename "$$f")
-                                        pm install-write -S $$SZ $$SID "$$BN" "$$f"
-                                    done
-                                    pm install-commit $$SID
-                                fi
-                            """.trimIndent().replace("\n", " ; ")
+                            val d = "$"
+                            val sessionScript = "SID=${d}(pm install-create -r -d -g 2>/dev/null | grep -o '[0-9]*' | tail -n1) ; if [ -n \"${d}SID\" ]; then for f in $tmpDir/*.apk; do SZ=${d}(stat -c%s \"${d}f\") ; BN=${d}(basename \"${d}f\") ; pm install-write -S ${d}SZ ${d}SID \"${d}BN\" \"${d}f\" ; done ; pm install-commit ${d}SID ; fi"
                             RootUtil.executeCommand(sessionScript, useRoot = true)
                         }
                     }
