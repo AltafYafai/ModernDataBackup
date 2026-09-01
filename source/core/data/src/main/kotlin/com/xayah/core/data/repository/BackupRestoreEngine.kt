@@ -381,9 +381,11 @@ class BackupRestoreEngine @Inject constructor(
         includeObb: Boolean = true,
         includePermissions: Boolean = true,
         includeSsaid: Boolean = true,
-        customBackupPath: String = ""
+        customBackupPath: String = "",
+        onProgress: (Float, String) -> Unit = { _, _ -> }
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            onProgress(0.05f, "Preparing $label...")
             val pathStr = if (customBackupPath.isNotBlank()) customBackupPath else PathUtil.DEFAULT_BACKUP_PATH
             val baseDir = File(pathStr)
             val appDir = File(baseDir, packageName)
@@ -400,6 +402,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 1. Full APK Backup (Base + Splits)
             if (includeApk) {
+                onProgress(0.20f, "Backing up APKs...")
                 val apkPaths = mutableListOf<String>()
                 if (isRoot) {
                     val pathRes = RootUtil.executeCommand("pm path $packageName", useRoot = true)
@@ -428,6 +431,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 2. Internal Data Backup (/data/data/<pkg>)
             if (includeData) {
+                onProgress(0.50f, "Archiving Internal Data...")
                 val dataPath = appInfo.dataDir ?: "/data/data/$packageName"
                 val destArchive = File(appDir, "data.tar.gz")
                 if (isRoot) {
@@ -447,6 +451,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 3. Device Protected Data (/data/user_de/0/<pkg>)
             if (includeDeData && isRoot) {
+                onProgress(0.70f, "Backing up Protected Data...")
                 val dePath = "/data/user_de/0/$packageName"
                 val destDeArchive = File(appDir, "data_de.tar.gz")
                 val cmd = "test -d '$dePath' && cd '$dePath' && (tar -czf '${destDeArchive.absolutePath}' . 2>/dev/null || tar -cf '${destDeArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destDeArchive.absolutePath}'"
@@ -463,6 +468,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 5. Multimedia & Media Files (/sdcard/Android/media/<pkg>)
             if (includeMedia && isRoot) {
+                onProgress(0.80f, "Backing up Media Files...")
                 val mediaPath = "/sdcard/Android/media/$packageName"
                 val destMediaArchive = File(appDir, "media.tar.gz")
                 val cmd = "test -d '$mediaPath' && cd '$mediaPath' && (tar -czf '${destMediaArchive.absolutePath}' . 2>/dev/null || tar -cf '${destMediaArchive.absolutePath}' . 2>/dev/null) && chmod 644 '${destMediaArchive.absolutePath}'"
@@ -479,6 +485,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 7. App Login Identifier (SSAID / Android ID per app)
             if (includeSsaid && isRoot) {
+                onProgress(0.90f, "Saving Logins & Sessions...")
                 val ssaid = RootUtil.getAppSsaid(packageName)
                 if (ssaid != null) {
                     val ssaidFile = File(appDir, "ssaid.txt")
@@ -488,6 +495,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 8. Runtime Permissions & AppOps State
             if (includePermissions && isRoot) {
+                onProgress(0.95f, "Saving Permissions...")
                 val perms = RootUtil.getGrantedPermissions(packageName)
                 if (perms.isNotEmpty()) {
                     val permFile = File(appDir, "permissions.txt")
@@ -500,6 +508,7 @@ class BackupRestoreEngine @Inject constructor(
                 }
             }
 
+            onProgress(1.0f, "Completed: $label")
             val task = TaskEntity(
                 packageName = packageName,
                 label = label,
@@ -537,9 +546,11 @@ class BackupRestoreEngine @Inject constructor(
         restoreObb: Boolean = true,
         restorePermissions: Boolean = true,
         restoreSsaid: Boolean = true,
-        customBackupPath: String = ""
+        customBackupPath: String = "",
+        onProgress: (Float, String) -> Unit = { _, _ -> }
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            onProgress(0.05f, "Preparing $label...")
             if (packageName.isBlank() || packageName == context.packageName) {
                 return@withContext Result.failure(Exception("Cannot restore active running application ($packageName)"))
             }
@@ -562,6 +573,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 1. Restore APK (Multi-Split / Base) via /data/local/tmp staging for SELinux / installd compatibility
             if (restoreApk && isRoot) {
+                onProgress(0.30f, "Installing APK package...")
                 val apkNames = dirFiles.filter { it.endsWith(".apk") }
                 if (apkNames.isNotEmpty()) {
                     val tmpDir = "/data/local/tmp/mbackup_install_$packageName"
@@ -594,6 +606,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 3. Restore Internal App Data & Logins with exact UID ownership
             if (restoreData && isRoot) {
+                onProgress(0.60f, "Restoring App Data & Logins...")
                 val dataTar = if (dirFiles.contains("data.tar.gz")) "${appDir.absolutePath}/data.tar.gz"
                 else if (dirFiles.contains("data.tar")) "${appDir.absolutePath}/data.tar"
                 else null
@@ -618,6 +631,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 4. Restore Device Protected Data (DE Data)
             if (restoreDeData && isRoot) {
+                onProgress(0.75f, "Restoring Protected Data...")
                 val deTar = "${appDir.absolutePath}/data_de.tar.gz"
                 val dePath = "/data/user_de/0/$packageName"
                 val tmpDeTar = "/data/local/tmp/restore_de_$packageName.tar.gz"
@@ -647,6 +661,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 6. Restore Multimedia Files (/sdcard/Android/media/<pkg>)
             if (restoreMedia && isRoot) {
+                onProgress(0.85f, "Restoring Media Files...")
                 val mediaTar = "${appDir.absolutePath}/media.tar.gz"
                 val mediaPath = "/sdcard/Android/media/$packageName"
                 val tmpMediaTar = "/data/local/tmp/restore_media_$packageName.tar.gz"
@@ -671,6 +686,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 8. Restore SSAID / Device Login Identity
             if (restoreSsaid && isRoot) {
+                onProgress(0.92f, "Restoring Login Identity...")
                 val ssaidFile = "${appDir.absolutePath}/ssaid.txt"
                 val readRes = RootUtil.executeCommand("cat '$ssaidFile' 2>/dev/null", useRoot = true)
                 if (readRes.isSuccess && readRes.out.isNotEmpty()) {
@@ -681,6 +697,7 @@ class BackupRestoreEngine @Inject constructor(
 
             // 9. Restore Runtime Permissions & AppOps
             if (restorePermissions && isRoot) {
+                onProgress(0.97f, "Restoring Permissions & AppOps...")
                 val permFile = "${appDir.absolutePath}/permissions.txt"
                 val readRes = RootUtil.executeCommand("cat '$permFile' 2>/dev/null", useRoot = true)
                 if (readRes.isSuccess) {
@@ -700,6 +717,7 @@ class BackupRestoreEngine @Inject constructor(
                 }
             }
 
+            onProgress(1.0f, "Restored: $label")
             val task = TaskEntity(
                 packageName = packageName,
                 label = label,
