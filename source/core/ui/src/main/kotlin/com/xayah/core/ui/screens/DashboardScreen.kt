@@ -1,8 +1,9 @@
 package com.xayah.core.ui.screens
 
-import androidx.compose.foundation.background
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,20 +14,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.xayah.core.database.entity.TaskEntity
+import com.xayah.core.ui.viewmodel.MainViewModel
+import com.xayah.core.util.DateUtil
+import com.xayah.core.util.toDateString
 
 @Composable
 fun DashboardScreen(
+    viewModel: MainViewModel,
     onNavigateToApps: () -> Unit = {},
     onNavigateToCloud: () -> Unit = {},
     onNavigateToHistory: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {}
 ) {
-    var includeAppData by remember { mutableStateOf(true) }
-    var includeApk by remember { mutableStateOf(true) }
-    var isBackingUp by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val installedApps by viewModel.installedApps.collectAsState()
+    val storageInfo by viewModel.storageInfo.collectAsState()
+    val isRoot by viewModel.isRootGranted.collectAsState()
+    val history by viewModel.history.collectAsState()
+    val currentOp by viewModel.currentOperation.collectAsState()
+    val progress by viewModel.operationProgress.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+
+    val userAppsCount = installedApps.count { !it.isSystemApp }
+    val systemAppsCount = installedApps.count { it.isSystemApp }
+    val backedUpCount = installedApps.count { it.enabled }
 
     LazyColumn(
         modifier = Modifier
@@ -61,20 +76,20 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Root Access: Granted • ZSTD Engine",
+                                text = if (isRoot) "Root Access: Granted • ZSTD Native" else "Standard Mode • ZSTD Native",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
                         }
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Status OK",
+                                    imageVector = if (isRoot) Icons.Default.CheckCircle else Icons.Default.Info,
+                                    contentDescription = "Status",
                                     tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -97,20 +112,61 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "45.2 GB Free / 128 GB",
+                                text = "${storageInfo.freeFormatted} Free / ${storageInfo.totalFormatted}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                         LinearProgressIndicator(
-                            progress = { 0.65f },
+                            progress = { storageInfo.progress },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Active Operation Progress Banner
+        if (currentOp != null) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = currentOp ?: "Processing...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -125,17 +181,17 @@ fun DashboardScreen(
             ) {
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Apps",
-                    count = "142",
-                    subtitle = "88 User • 54 Sys",
+                    title = "Installed Apps",
+                    count = "${installedApps.size}",
+                    subtitle = "$userAppsCount User • $systemAppsCount Sys",
                     icon = Icons.Default.Apps,
                     onClick = onNavigateToApps
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = "Backed Up",
-                    count = "76",
-                    subtitle = "14.2 GB archive",
+                    count = "$backedUpCount",
+                    subtitle = "${history.size} total operations",
                     icon = Icons.Default.Backup,
                     onClick = onNavigateToHistory
                 )
@@ -187,7 +243,7 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "APK + Data (ZSTD Compressed)",
+                                text = "$userAppsCount apps selected (APK + Data)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -201,27 +257,31 @@ fun DashboardScreen(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
-                                selected = includeAppData,
-                                onClick = { includeAppData = !includeAppData },
+                                selected = settings.includeData,
+                                onClick = { viewModel.updateSettings(includeData = !settings.includeData) },
                                 label = { Text("App Data") }
                             )
                             FilterChip(
-                                selected = includeApk,
-                                onClick = { includeApk = !includeApk },
+                                selected = settings.includeApk,
+                                onClick = { viewModel.updateSettings(includeApk = !settings.includeApk) },
                                 label = { Text("APK") }
                             )
                         }
                         Button(
-                            onClick = { isBackingUp = !isBackingUp },
+                            onClick = {
+                                val targetApps = installedApps.filter { !it.isSystemApp }
+                                viewModel.backupBatch(context, targetApps)
+                            },
+                            enabled = currentOp == null && installedApps.isNotEmpty(),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(
-                                imageVector = if (isBackingUp) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = if (isBackingUp) "Stop" else "Start")
+                            Text(text = "Start Backup")
                         }
                     }
                 }
@@ -312,29 +372,35 @@ fun DashboardScreen(
         }
 
         // Recent Activity Items
-        item {
-            ActivityItem(
-                title = "Telegram",
-                subtitle = "Backup Completed • 452 MB",
-                time = "10m ago",
-                isSuccess = true
-            )
-        }
-        item {
-            ActivityItem(
-                title = "WhatsApp",
-                subtitle = "Backup Completed • 1.2 GB",
-                time = "2h ago",
-                isSuccess = true
-            )
-        }
-        item {
-            ActivityItem(
-                title = "Spotify",
-                subtitle = "Restored successfully • 120 MB",
-                time = "Yesterday",
-                isSuccess = true
-            )
+        if (history.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No backup history yet. Start your first backup!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(history.take(4)) { task ->
+                ActivityItem(
+                    title = task.label,
+                    subtitle = "${if (task.isBackup) "Backup" else "Restore"} • ${task.status}",
+                    time = task.timestamp.toDateString(),
+                    isSuccess = task.status == "SUCCESS"
+                )
+            }
         }
     }
 }

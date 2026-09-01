@@ -13,28 +13,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-data class HistoryItemModel(
-    val id: String,
-    val title: String,
-    val type: String, // "Backup" or "Restore"
-    val date: String,
-    val details: String,
-    val size: String,
-    val isSuccess: Boolean
-)
+import com.xayah.core.database.entity.TaskEntity
+import com.xayah.core.ui.viewmodel.MainViewModel
+import com.xayah.core.util.toDateString
 
 @Composable
-fun HistoryScreen() {
-    val historyItems = remember {
-        listOf(
-            HistoryItemModel("1", "Full User Apps Backup", "Backup", "Sep 1, 2026 14:30", "76 apps (ZSTD-3 compressed)", "14.2 GB", true),
-            HistoryItemModel("2", "WhatsApp Data Restore", "Restore", "Sep 1, 2026 11:15", "Apk + User Data restored", "1.4 GB", true),
-            HistoryItemModel("3", "Telegram Backup", "Backup", "Aug 31, 2026 22:00", "Apk + Data archive created", "850 MB", true),
-            HistoryItemModel("4", "Scheduled Daily Backup", "Backup", "Aug 30, 2026 03:00", "52 apps backed up to SMB", "8.9 GB", true),
-            HistoryItemModel("5", "Spotify App Restore", "Restore", "Aug 29, 2026 18:20", "Data restored successfully", "512 MB", true)
-        )
-    }
+fun HistoryScreen(
+    viewModel: MainViewModel
+) {
+    val history by viewModel.history.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -50,29 +37,59 @@ fun HistoryScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Backup & Restore History",
+                    text = "Backup & Restore History (${history.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                FilledTonalButton(
-                    onClick = { /* Clear */ },
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Clear")
+                if (history.isNotEmpty()) {
+                    FilledTonalButton(
+                        onClick = { viewModel.clearHistory() },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Clear")
+                    }
                 }
             }
         }
 
-        items(historyItems, key = { it.id }) { item ->
-            HistoryCard(item = item)
+        if (history.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "No backup or restore operations recorded yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(history, key = { it.id }) { item ->
+                HistoryEntityCard(task = item)
+            }
         }
     }
 }
 
 @Composable
-fun HistoryCard(item: HistoryItemModel) {
+fun HistoryEntityCard(task: TaskEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -87,14 +104,14 @@ fun HistoryCard(item: HistoryItemModel) {
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (item.type == "Backup") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                color = if (task.isBackup) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.size(44.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = if (item.type == "Backup") Icons.Default.Backup else Icons.Default.Restore,
+                        imageVector = if (task.isBackup) Icons.Default.Backup else Icons.Default.Restore,
                         contentDescription = null,
-                        tint = if (item.type == "Backup") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                        tint = if (task.isBackup) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -102,17 +119,17 @@ fun HistoryCard(item: HistoryItemModel) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = item.title,
+                    text = task.label,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = item.details,
+                    text = "${task.packageName} • ${if (task.isBackup) "Backup" else "Restore"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "${item.date} • ${item.size}",
+                    text = task.timestamp.toDateString(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -120,13 +137,13 @@ fun HistoryCard(item: HistoryItemModel) {
 
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = if (item.isSuccess) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+                color = if (task.status == "SUCCESS") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
             ) {
                 Text(
-                    text = if (item.isSuccess) "SUCCESS" else "FAILED",
+                    text = task.status,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (item.isSuccess) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                    color = if (task.status == "SUCCESS") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }

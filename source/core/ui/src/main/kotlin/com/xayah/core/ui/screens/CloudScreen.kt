@@ -6,22 +6,28 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xayah.core.ui.viewmodel.MainViewModel
 
 @Composable
-fun CloudScreen() {
+fun CloudScreen(
+    viewModel: MainViewModel
+) {
+    val serverHost by viewModel.serverHost.collectAsState()
+    val serverPort by viewModel.serverPort.collectAsState()
+    val remotePath by viewModel.remotePath.collectAsState()
+    val isTesting by viewModel.isTestingConnection.collectAsState()
+    val connResult by viewModel.connectionResult.collectAsState()
+
+    var hostInput by remember(serverHost) { mutableStateOf(serverHost) }
+    var portInput by remember(serverPort) { mutableStateOf(serverPort) }
+    var pathInput by remember(remotePath) { mutableStateOf(remotePath) }
     var selectedProtocol by remember { mutableStateOf(0) } // 0: SMB, 1: SFTP, 2: WebDAV, 3: Local
-    var serverHost by remember { mutableStateOf("192.168.1.100") }
-    var serverPort by remember { mutableStateOf("445") }
-    var remotePath by remember { mutableStateOf("/backups/android") }
-    var isTesting by remember { mutableStateOf(false) }
-    var connectionSuccess by remember { mutableStateOf<Boolean?>(true) }
 
     LazyColumn(
         modifier = Modifier
@@ -46,7 +52,15 @@ fun CloudScreen() {
                 protocols.forEachIndexed { index, name ->
                     FilterChip(
                         selected = selectedProtocol == index,
-                        onClick = { selectedProtocol = index },
+                        onClick = {
+                            selectedProtocol = index
+                            portInput = when (index) {
+                                0 -> "445"
+                                1 -> "22"
+                                2 -> "443"
+                                else -> "0"
+                            }
+                        },
                         label = { Text(name) }
                     )
                 }
@@ -59,7 +73,11 @@ fun CloudScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = when (connResult) {
+                        true -> MaterialTheme.colorScheme.primaryContainer
+                        false -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.secondaryContainer
+                    }
                 )
             ) {
                 Row(
@@ -71,14 +89,18 @@ fun CloudScreen() {
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = when (connResult) {
+                            true -> MaterialTheme.colorScheme.primary
+                            false -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.secondary
+                        },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Default.CloudSync,
+                                imageVector = if (connResult == false) Icons.Default.ErrorOutline else Icons.Default.CloudSync,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondary
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -86,20 +108,27 @@ fun CloudScreen() {
                         Text(
                             text = "Remote Sync Status",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (connectionSuccess == true) "Connected: SMB://192.168.1.100" else "Not Connected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            text = when (connResult) {
+                                true -> "Connected to $hostInput:$portInput"
+                                false -> "Connection Failed"
+                                else -> "Target: $hostInput:$portInput"
+                            },
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    FilledTonalButton(
-                        onClick = { isTesting = true },
+                    Button(
+                        onClick = { viewModel.testCloudConnection() },
+                        enabled = !isTesting,
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Test")
+                        if (isTesting) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Test")
+                        }
                     }
                 }
             }
@@ -122,8 +151,8 @@ fun CloudScreen() {
                     )
 
                     OutlinedTextField(
-                        value = serverHost,
-                        onValueChange = { serverHost = it },
+                        value = hostInput,
+                        onValueChange = { hostInput = it },
                         label = { Text("Server Host / IP") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -134,15 +163,15 @@ fun CloudScreen() {
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedTextField(
-                            value = serverPort,
-                            onValueChange = { serverPort = it },
+                            value = portInput,
+                            onValueChange = { portInput = it },
                             label = { Text("Port") },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         )
                         OutlinedTextField(
-                            value = remotePath,
-                            onValueChange = { remotePath = it },
+                            value = pathInput,
+                            onValueChange = { pathInput = it },
                             label = { Text("Remote Directory") },
                             modifier = Modifier.weight(2f),
                             shape = RoundedCornerShape(12.dp)
@@ -154,59 +183,13 @@ fun CloudScreen() {
                         horizontalArrangement = Arrangement.End
                     ) {
                         Button(
-                            onClick = { /* Save configuration */ },
+                            onClick = { viewModel.saveServerConfig(hostInput, portInput, pathInput) },
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Save Server")
                         }
-                    }
-                }
-            }
-        }
-
-        // Remote Backups
-        item {
-            Text(
-                text = "Cloud Backups (Remote)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FolderZip,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Backup_2026-09-01_14-30.zst",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "76 Apps • 14.2 GB • SHA-256 Verified",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = { /* Download */ }) {
-                        Icon(Icons.Default.Download, contentDescription = "Download")
                     }
                 }
             }

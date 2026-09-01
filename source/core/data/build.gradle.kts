@@ -10,4 +10,5 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(project(":core:network"))
     implementation(project(":core:rootservice"))
+    implementation(project(":core:util"))
 }

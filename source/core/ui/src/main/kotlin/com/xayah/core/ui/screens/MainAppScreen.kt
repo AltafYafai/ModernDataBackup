@@ -7,8 +7,10 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.xayah.core.ui.viewmodel.MainViewModel
 
 sealed class NavTab(
     val title: String,
@@ -24,8 +26,24 @@ sealed class NavTab(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen() {
+fun MainAppScreen(
+    viewModel: MainViewModel = hiltViewModel()
+) {
+    val context = LocalContext.current
     var selectedTab by remember { mutableStateOf<NavTab>(NavTab.Dashboard) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.initData(context)
+    }
+
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearSnackbar()
+        }
+    }
 
     val tabs = listOf(
         NavTab.Dashboard,
@@ -37,6 +55,7 @@ fun MainAppScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -54,7 +73,10 @@ fun MainAppScreen() {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Refresh */ }) {
+                    IconButton(onClick = {
+                        viewModel.scanInstalledApps(context)
+                        viewModel.loadHistory()
+                    }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 },
@@ -91,15 +113,16 @@ fun MainAppScreen() {
         ) {
             when (selectedTab) {
                 is NavTab.Dashboard -> DashboardScreen(
+                    viewModel = viewModel,
                     onNavigateToApps = { selectedTab = NavTab.Apps },
                     onNavigateToCloud = { selectedTab = NavTab.Cloud },
                     onNavigateToHistory = { selectedTab = NavTab.History },
                     onNavigateToSettings = { selectedTab = NavTab.Settings }
                 )
-                is NavTab.Apps -> AppsScreen()
-                is NavTab.Cloud -> CloudScreen()
-                is NavTab.History -> HistoryScreen()
-                is NavTab.Settings -> SettingsScreen()
+                is NavTab.Apps -> AppsScreen(viewModel = viewModel)
+                is NavTab.Cloud -> CloudScreen(viewModel = viewModel)
+                is NavTab.History -> HistoryScreen(viewModel = viewModel)
+                is NavTab.Settings -> SettingsScreen(viewModel = viewModel)
             }
         }
     }
