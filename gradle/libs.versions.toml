@@ -68,12 +68,12 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-library-common = { id = "library.common", version = "unspecified" }
-library-compose = { id = "library.compose", version = "unspecified" }
-library-room = { id = "library.room", version = "unspecified" }
-library-hilt = { id = "library.hilt", version = "unspecified" }
-library-hilt-work = { id = "library.hilt.work", version = "unspecified" }
-application-common = { id = "application.common", version = "unspecified" }
-application-compose = { id = "application.compose", version = "unspecified" }
-application-hilt = { id = "application.hilt", version = "unspecified" }
-application-hilt-work = { id = "application.hilt.work", version = "unspecified" }
+library-common = { id = "library.common" }
+library-compose = { id = "library.compose" }
+library-room = { id = "library.room" }
+library-hilt = { id = "library.hilt" }
+library-hilt-work = { id = "library.hilt.work" }
+application-common = { id = "application.common" }
+application-compose = { id = "application.compose" }
+application-hilt = { id = "application.hilt" }
+application-hilt-work = { id = "application.hilt.work" }
