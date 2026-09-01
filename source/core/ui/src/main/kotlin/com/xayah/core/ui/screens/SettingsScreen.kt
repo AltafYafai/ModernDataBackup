@@ -161,8 +161,22 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     SettingToggleRow(
-                        title = "Runtime Permissions",
-                        subtitle = "Save and auto-grant application runtime permissions",
+                        title = "Multimedia Files (/sdcard/Android/media)",
+                        subtitle = "WhatsApp, Telegram, photos, voice notes, stickers, videos",
+                        checked = settings.includeMedia,
+                        onCheckedChange = { viewModel.updateSettings(includeMedia = it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    SettingToggleRow(
+                        title = "Preserve App Logins & SSAID",
+                        subtitle = "Saves per-app hardware IDs & tokens so you remain logged in",
+                        checked = settings.includeSsaid,
+                        onCheckedChange = { viewModel.updateSettings(includeSsaid = it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    SettingToggleRow(
+                        title = "Runtime Permissions & AppOps",
+                        subtitle = "Save and auto-grant application permissions & power grants",
                         checked = settings.includePermissions,
                         onCheckedChange = { viewModel.updateSettings(includePermissions = it) }
                     )

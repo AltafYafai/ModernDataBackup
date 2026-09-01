@@ -467,7 +467,7 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "$userAppsCount apps (APK, Data, DE Data, OBB, Perms)",
+                                text = "$userAppsCount apps (APK, Data, Media, OBB, Logins, Perms)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -490,9 +490,14 @@ fun DashboardScreen(
                             label = { Text("Data") }
                         )
                         FilterChip(
-                            selected = settings.includeDeData,
-                            onClick = { viewModel.updateSettings(includeDeData = !settings.includeDeData) },
-                            label = { Text("DE Data") }
+                            selected = settings.includeMedia,
+                            onClick = { viewModel.updateSettings(includeMedia = !settings.includeMedia) },
+                            label = { Text("Media") }
+                        )
+                        FilterChip(
+                            selected = settings.includeSsaid,
+                            onClick = { viewModel.updateSettings(includeSsaid = !settings.includeSsaid) },
+                            label = { Text("Logins") }
                         )
                         FilterChip(
                             selected = settings.includePermissions,

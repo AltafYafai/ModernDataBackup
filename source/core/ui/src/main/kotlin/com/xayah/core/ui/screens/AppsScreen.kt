@@ -489,7 +489,9 @@ fun RestoreBackupCard(
                     if (backup.hasData) ComponentBadge("DATA")
                     if (backup.hasDeData) ComponentBadge("DE")
                     if (backup.hasExtData) ComponentBadge("EXT")
+                    if (backup.hasMedia) ComponentBadge("MEDIA")
                     if (backup.hasObb) ComponentBadge("OBB")
+                    if (backup.hasSsaid) ComponentBadge("LOGINS")
                 }
             }
 

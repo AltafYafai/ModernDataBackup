@@ -93,6 +93,28 @@ object RootUtil {
         return null
     }
 
+    fun getAppSsaid(packageName: String): String? {
+        val cmd = "grep -B 1 '$packageName' /data/system/users/0/settings_ssaid.xml | grep 'value=' | sed 's/.*value=\"//;s/\".*//'"
+        val res = executeCommand(cmd, useRoot = true)
+        if (res.isSuccess && res.out.isNotEmpty() && res.out.first().isNotBlank()) {
+            return res.out.first().trim()
+        }
+        val ssaidRes = executeCommand("settings get --user 0 secure android_id", useRoot = true)
+        if (ssaidRes.isSuccess && ssaidRes.out.isNotEmpty() && ssaidRes.out.first().isNotBlank()) {
+            return ssaidRes.out.first().trim()
+        }
+        return null
+    }
+
+    fun restoreAppSsaid(packageName: String, ssaid: String) {
+        if (ssaid.isBlank()) return
+        val uid = getAppUid(packageName)?.first
+        if (uid != null) {
+            val cmd = "sed -i '/name=\"$packageName\"/!b;n;c\\    <setting id=\"$uid\" name=\"$packageName\" value=\"$ssaid\" package=\"$packageName\" />' /data/system/users/0/settings_ssaid.xml"
+            executeCommand(cmd, useRoot = true)
+        }
+    }
+
     fun getGrantedPermissions(packageName: String): List<String> {
         val cmd = "dumpsys package $packageName | grep 'permission.*granted=true'"
         val res = executeCommand(cmd, useRoot = true)
@@ -111,6 +133,23 @@ object RootUtil {
     fun grantPermission(packageName: String, permission: String): Boolean {
         val cmd = "pm grant $packageName $permission"
         return executeCommand(cmd, useRoot = true).isSuccess
+    }
+
+    fun getAppOps(packageName: String): List<String> {
+        val cmd = "appops get $packageName"
+        val res = executeCommand(cmd, useRoot = true)
+        return if (res.isSuccess) res.out.filter { it.contains(": allow") } else emptyList()
+    }
+
+    fun restoreAppOp(packageName: String, opLine: String) {
+        val op = opLine.substringBefore(":").trim()
+        if (op.isNotBlank()) {
+            executeCommand("appops set $packageName $op allow", useRoot = true)
+        }
+    }
+
+    fun forceStopApp(packageName: String) {
+        executeCommand("am force-stop $packageName", useRoot = true)
     }
 
     fun executeCommand(command: String, useRoot: Boolean = true): CommandResult {
@@ -140,7 +179,6 @@ object RootUtil {
             }
 
             val exitCode = process.waitFor()
-            // In unix/toybox tools (e.g. tar or cp), exit code 0 or 1 with non-critical warnings is common
             CommandResult(
                 isSuccess = exitCode == 0 || exitCode == 1,
                 out = outLines,

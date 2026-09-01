@@ -21,8 +21,10 @@ data class UiSettings(
     val includeApk: Boolean = true,
     val includeDeData: Boolean = true,
     val includeExtData: Boolean = true,
+    val includeMedia: Boolean = true,
     val includeObb: Boolean = true,
     val includePermissions: Boolean = true,
+    val includeSsaid: Boolean = true,
     val includeSystem: Boolean = false,
     val autoBackup: Boolean = false
 )
@@ -47,7 +49,7 @@ class MainViewModel @Inject constructor(
     val isLoadingApps: StateFlow<Boolean> = _isLoadingApps.asStateFlow()
 
     private val _storageInfo = MutableStateFlow(
-        StorageSpaceInfo(32_000_000_000L, 128_000_000_000L, "32.0 GB", "128.0 GB", 0.75f, "/storage/emulated/0/ModernDataBackup")
+        StorageSpaceInfo(32_000_000_000L, 128_000_000_000L, "32.0 GB", "128.0 GB", 0.75f, "/sdcard/moderndatabackup")
     )
     val storageInfo: StateFlow<StorageSpaceInfo> = _storageInfo.asStateFlow()
 
@@ -94,7 +96,7 @@ class MainViewModel @Inject constructor(
     fun initData(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             refreshRootStatus()
-            val primaryDir = PathUtil.getPrimaryBackupDir(context).absolutePath
+            val primaryDir = PathUtil.DEFAULT_BACKUP_PATH
             _settings.value = _settings.value.copy(backupPath = primaryDir)
             _storageInfo.value = backupRestoreEngine.getStorageSpace(context, primaryDir)
             _storageLocations.value = backupRestoreEngine.getAvailableStorageLocations(context)
@@ -186,7 +188,7 @@ class MainViewModel @Inject constructor(
 
     fun backupSingle(context: Context, app: AppEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            _currentOperation.value = "Backing up ${app.label} (APK + Data + Perms)..."
+            _currentOperation.value = "Backing up ${app.label} (APK + Data + Media + Logins)..."
             _operationProgress.value = 0.3f
             val res = backupRestoreEngine.backupApp(
                 context = context,
@@ -196,8 +198,10 @@ class MainViewModel @Inject constructor(
                 includeData = _settings.value.includeData,
                 includeDeData = _settings.value.includeDeData,
                 includeExtData = _settings.value.includeExtData,
+                includeMedia = _settings.value.includeMedia,
                 includeObb = _settings.value.includeObb,
                 includePermissions = _settings.value.includePermissions,
+                includeSsaid = _settings.value.includeSsaid,
                 customBackupPath = _settings.value.backupPath
             )
             _operationProgress.value = 1f
@@ -219,7 +223,7 @@ class MainViewModel @Inject constructor(
 
     fun restoreSingle(context: Context, packageName: String, label: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            _currentOperation.value = "Restoring $label (APK + Data + Perms)..."
+            _currentOperation.value = "Restoring $label (APK + Data + Media + Logins)..."
             _operationProgress.value = 0.3f
             val res = backupRestoreEngine.restoreApp(
                 context = context,
@@ -229,8 +233,10 @@ class MainViewModel @Inject constructor(
                 restoreData = _settings.value.includeData,
                 restoreDeData = _settings.value.includeDeData,
                 restoreExtData = _settings.value.includeExtData,
+                restoreMedia = _settings.value.includeMedia,
                 restoreObb = _settings.value.includeObb,
                 restorePermissions = _settings.value.includePermissions,
+                restoreSsaid = _settings.value.includeSsaid,
                 customBackupPath = _settings.value.backupPath
             )
             _operationProgress.value = 1f
@@ -261,8 +267,10 @@ class MainViewModel @Inject constructor(
                     includeData = _settings.value.includeData,
                     includeDeData = _settings.value.includeDeData,
                     includeExtData = _settings.value.includeExtData,
+                    includeMedia = _settings.value.includeMedia,
                     includeObb = _settings.value.includeObb,
                     includePermissions = _settings.value.includePermissions,
+                    includeSsaid = _settings.value.includeSsaid,
                     customBackupPath = _settings.value.backupPath
                 )
                 if (res.isSuccess) successCount++
@@ -293,8 +301,10 @@ class MainViewModel @Inject constructor(
                     restoreData = _settings.value.includeData,
                     restoreDeData = _settings.value.includeDeData,
                     restoreExtData = _settings.value.includeExtData,
+                    restoreMedia = _settings.value.includeMedia,
                     restoreObb = _settings.value.includeObb,
                     restorePermissions = _settings.value.includePermissions,
+                    restoreSsaid = _settings.value.includeSsaid,
                     customBackupPath = _settings.value.backupPath
                 )
                 if (res.isSuccess) successCount++
@@ -345,8 +355,10 @@ class MainViewModel @Inject constructor(
         includeApk: Boolean = _settings.value.includeApk,
         includeDeData: Boolean = _settings.value.includeDeData,
         includeExtData: Boolean = _settings.value.includeExtData,
+        includeMedia: Boolean = _settings.value.includeMedia,
         includeObb: Boolean = _settings.value.includeObb,
         includePermissions: Boolean = _settings.value.includePermissions,
+        includeSsaid: Boolean = _settings.value.includeSsaid,
         includeSystem: Boolean = _settings.value.includeSystem,
         autoBackup: Boolean = _settings.value.autoBackup,
         context: Context? = null
@@ -359,8 +371,10 @@ class MainViewModel @Inject constructor(
             includeApk = includeApk,
             includeDeData = includeDeData,
             includeExtData = includeExtData,
+            includeMedia = includeMedia,
             includeObb = includeObb,
             includePermissions = includePermissions,
+            includeSsaid = includeSsaid,
             includeSystem = includeSystem,
             autoBackup = autoBackup
         )
