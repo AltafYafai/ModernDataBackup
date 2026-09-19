@@ -12,13 +12,29 @@ object RootShell {
 
     suspend fun isRooted(refresh: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         if (!refresh) cached?.let { return@withContext it }
+        // NOTE: libsu runs commands as the app user when root is unavailable,
+        // so exit code alone proves nothing — the UID must actually be 0.
         val ok = try {
-            Shell.cmd("id").exec().isSuccess
+            val r = Shell.cmd("id -u").exec()
+            r.isSuccess && r.out.firstOrNull()?.trim() == "0"
         } catch (e: Exception) {
             false
         }
         cached = ok
         ok
+    }
+
+    /** Human-readable shell probe for the diagnostics screen. */
+    suspend fun probe(): String = withContext(Dispatchers.IO) {
+        try {
+            val r = Shell.cmd("id").exec()
+            if (!r.isSuccess) return@withContext "shell failed to start"
+            val id = r.out.firstOrNull()?.trim() ?: "no output"
+            val rooted = isRooted()
+            "id: $id · root=${if (rooted) "YES" else "no"}"
+        } catch (e: Exception) {
+            "shell error: ${e.message}"
+        }
     }
 
     suspend fun exec(command: String): Shell.Result = withContext(Dispatchers.IO) {

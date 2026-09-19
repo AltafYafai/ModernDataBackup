@@ -1,5 +1,9 @@
 package com.freshbackup.app.ui.screens
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,11 +27,13 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -37,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.freshbackup.app.ui.BackupViewModel
 import java.text.DateFormat
@@ -50,6 +57,18 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
     val storage by vm.storage.collectAsState()
     val rooted by vm.rooted.collectAsState()
     val job by vm.job.collectAsState()
+    val perms by vm.perms.collectAsState()
+    val context = LocalContext.current
+
+    val runtimeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { vm.refreshPerms() }
+
+    fun requestRuntime() {
+        val list = mutableListOf(Manifest.permission.READ_SMS, Manifest.permission.READ_CALL_LOG)
+        if (Build.VERSION.SDK_INT >= 33) list.add(Manifest.permission.POST_NOTIFICATIONS)
+        runtimeLauncher.launch(list.toTypedArray())
+    }
 
     val backedUpPkgs = records.map { it.packageName }.toSet()
 
@@ -79,6 +98,38 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Setup blockers first — nothing can work until these are granted.
+            if (!perms.allFiles || !perms.dirWritable) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Backup storage unavailable", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Fresh Backup cannot write to its folder. Grant All-files access to enable all backups.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Button(onClick = { context.startActivity(vm.allFilesIntent()) }) {
+                            Text("Grant all-files access")
+                        }
+                    }
+                }
+            }
+            if (!perms.messagingOk) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Device-data permissions", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "SMS and call-log backup need runtime permission.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        OutlinedButton(onClick = { requestRuntime() }) {
+                            Text("Grant SMS & call permissions")
+                        }
+                    }
+                }
+            }
             // Storage card
             storage?.let { st ->
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {

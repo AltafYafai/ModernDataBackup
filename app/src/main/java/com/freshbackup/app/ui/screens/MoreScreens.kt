@@ -213,7 +213,21 @@ fun SettingsScreen(vm: BackupViewModel) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("About", style = MaterialTheme.typography.titleMedium)
-                Text("Fresh Backup 1.1.0 — APKs without root, full app data + keystore with root, SMS/calls/wallpaper/WiFi/folders, schedules, and 6 cloud targets.", style = MaterialTheme.typography.bodySmall)
+                Text("Fresh Backup 1.1.1 — APKs without root, full app data + keystore with root, SMS/calls/wallpaper/WiFi/folders, schedules, and 6 cloud targets.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Diagnostics", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { vm.refreshDiagnostics() }) { Text("Run") }
+                }
+                val diag by vm.diagnostics.collectAsState()
+                if (diag.isEmpty()) {
+                    Text("Tap Run to probe root, permissions, storage and database.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    diag.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                }
             }
         }
         Spacer(Modifier.height(90.dp))

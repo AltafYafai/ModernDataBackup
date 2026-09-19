@@ -18,10 +18,14 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -63,6 +67,19 @@ private data class Tab(val route: String, val label: String, val icon: @Composab
 private fun FreshNav(localBackend: LocalBackend) {
     val nav = rememberNavController()
     val vm: BackupViewModel = hiltViewModel()
+    // Re-check root + permissions every time the app comes to foreground
+    // (e.g. returning from the All-files-access system screen).
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                vm.refresh()
+                vm.refreshPerms()
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     val tabs = listOf(
         Tab("home", "Home") { Icon(Icons.Filled.Home, null) },
         Tab("apps", "Apps") { Icon(Icons.Filled.PhoneAndroid, null) },

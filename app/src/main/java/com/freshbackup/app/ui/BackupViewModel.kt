@@ -1,9 +1,12 @@
 package com.freshbackup.app.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.provider.Settings as SystemSettings
@@ -60,6 +63,16 @@ data class StorageStats(
     }
 }
 
+data class PermState(
+    val sms: Boolean = false,
+    val calls: Boolean = false,
+    val notifications: Boolean = false,
+    val allFiles: Boolean = false,
+    val dirWritable: Boolean = false
+) {
+    val messagingOk: Boolean get() = sms && calls
+}
+
 @HiltViewModel
 class BackupViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -88,6 +101,8 @@ class BackupViewModel @Inject constructor(
     val schedList = MutableStateFlow<List<Schedule>>(emptyList())
     val storage = MutableStateFlow<StorageStats?>(null)
     val activeBackend = MutableStateFlow("local")
+    val perms = MutableStateFlow(PermState())
+    val diagnostics = MutableStateFlow<List<String>>(emptyList())
 
     private val iconCache = LruCache<String, Bitmap>(128)
 
@@ -110,6 +125,42 @@ class BackupViewModel @Inject constructor(
             refreshSchedules()
             refreshLabels()
             refreshStorage()
+        }
+        refreshPerms()
+    }
+
+    /** Fast permission snapshot — safe on the main thread, re-run on resume. */
+    fun refreshPerms() {
+        val sms = context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+        val calls = context.checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
+        val notif = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val allFiles = Environment.isExternalStorageManager()
+        val dir = try {
+            val d = File(backupDir.value.ifBlank { Settings.DEFAULT_DIR })
+            d.mkdirs()
+            val probe = File(d, ".write_test")
+            (probe.createNewFile() && probe.delete()) || d.canWrite()
+        } catch (e: Exception) {
+            false
+        }
+        perms.value = PermState(sms, calls, notif, allFiles, dir)
+    }
+
+    fun refreshDiagnostics() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val lines = mutableListOf<String>()
+            lines += RootShell.probe()
+            val p = perms.value
+            lines += "all-files access: ${if (p.allFiles) "YES" else "NO — required for /sdcard backups"}"
+            lines += "backup dir writable: ${if (p.dirWritable) "YES (${backupDir.value})" else "NO (${backupDir.value})"}"
+            lines += "SMS permission: ${if (p.sms) "YES" else "NO"}"
+            lines += "call-log permission: ${if (p.calls) "YES" else "NO"}"
+            lines += "notifications: ${if (p.notifications) "YES" else "NO"}"
+            lines += "apps indexed: ${apps.value.size}"
+            lines += "backup versions in DB: ${dao.all().size}"
+            lines += "schedules: ${schedules.all().size}"
+            diagnostics.value = lines
         }
     }
 

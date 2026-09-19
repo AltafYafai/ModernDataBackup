@@ -138,6 +138,16 @@ class Engine @Inject constructor(
     suspend fun backupRoot(): File = withContext(Dispatchers.IO) {
         val root = File(settings.backupDir())
         root.mkdirs()
+        val probe = File(root, ".write_test")
+        val writable = try {
+            probe.createNewFile() && probe.delete()
+        } catch (e: Exception) {
+            false
+        }
+        check(root.canWrite() && writable) {
+            "Backup folder is not writable: ${root.absolutePath}. " +
+                "Grant All-files access on the Home screen, or pick an app-private folder in Settings."
+        }
         root
     }
 }
