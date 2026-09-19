@@ -112,7 +112,7 @@ class AppData @Inject constructor() {
         val d = "$"
         RootShell.exec(
             "mkdir -p /data/misc/keystore/user_0 ; " +
-                "tar -xzf '${tar.absolutePath}' -C /data/misc/keystore/user_0 2>/dev/null ; " +
+                "(tar -xzf '${tar.absolutePath}' -C /data/misc/keystore/user_0 2>/dev/null || tar -xf '${tar.absolutePath}' -C /data/misc/keystore/user_0 2>/dev/null) ; " +
                 "if [ -n \"$oldUid\" ] && [ \"$oldUid\" != \"$target\" ]; then " +
                 "for f in /data/misc/keystore/user_0/${oldUid}_*; do " +
                 "if [ -f \"${d}f\" ]; then N=${d}(echo \"${d}f\" | sed \"s/${oldUid}_/${target}_/\") ; mv \"${d}f\" \"${d}N\" 2>/dev/null ; fi ; done ; fi ; " +
@@ -134,16 +134,20 @@ class AppData @Inject constructor() {
     ) = withContext(Dispatchers.IO) {
         RootShell.forceStop(pkg)
         val uid = RootShell.appUid(pkg)
+        if (uid == null) {
+            log("WARNING: UID of $pkg unknown — ownership fix skipped, app may crash on launch")
+        }
 
         if (restoreData) {
             val tar = File(srcDir, "data.tar.gz").takeIf { it.exists() }
             if (tar != null) {
                 val d = "$"
+                // -xzf first (gzip), -xf fallback (plain tar: some toolchains lack gzip)
                 RootShell.exec(
                     "mkdir -p '/data/user/0/$pkg' '/data/data/$pkg' ; " +
                         "LIB=${d}(readlink /data/user/0/$pkg/lib || readlink /data/data/$pkg/lib) ; " +
-                        "(cd '/data/user/0/$pkg' && tar -xzf '${tar.absolutePath}' 2>/dev/null) ; " +
-                        "(cd '/data/data/$pkg' && tar -xzf '${tar.absolutePath}' 2>/dev/null) ; " +
+                        "(cd '/data/user/0/$pkg' && (tar -xzf '${tar.absolutePath}' 2>/dev/null || tar -xf '${tar.absolutePath}' 2>/dev/null)) ; " +
+                        "(cd '/data/data/$pkg' && (tar -xzf '${tar.absolutePath}' 2>/dev/null || tar -xf '${tar.absolutePath}' 2>/dev/null)) ; " +
                         "if [ -n \"${d}LIB\" ]; then ln -sfn \"${d}LIB\" '/data/user/0/$pkg/lib' ; ln -sfn \"${d}LIB\" '/data/data/$pkg/lib' ; fi"
                 )
                 if (uid != null) {
@@ -153,22 +157,26 @@ class AppData @Inject constructor() {
                     )
                 }
                 RootShell.exec("restorecon -FR '/data/user/0/$pkg' '/data/data/$pkg' 2>/dev/null")
-                log("data restored")
+                val count = RootShell.exec("ls -A '/data/user/0/$pkg' 2>/dev/null | wc -l").out.firstOrNull()?.trim()
+                log("data restored ($count entries)")
+            } else {
+                log("no data archive in backup")
             }
         }
         if (restoreDe) {
             val tar = File(srcDir, "data_de.tar.gz").takeIf { it.exists() }
             if (tar != null) {
-                RootShell.exec("mkdir -p '/data/user_de/0/$pkg' ; (cd '/data/user_de/0/$pkg' && tar -xzf '${tar.absolutePath}' 2>/dev/null)")
+                RootShell.exec("mkdir -p '/data/user_de/0/$pkg' ; (cd '/data/user_de/0/$pkg' && (tar -xzf '${tar.absolutePath}' 2>/dev/null || tar -xf '${tar.absolutePath}' 2>/dev/null))")
                 if (uid != null) {
                     RootShell.exec("chown -R ${uid.first}:${uid.second} '/data/user_de/0/$pkg' 2>/dev/null ; chmod 755 '/data/user_de/0/$pkg' 2>/dev/null")
                 }
                 RootShell.exec("restorecon -FR '/data/user_de/0/$pkg' 2>/dev/null")
+                log("protected data restored")
             }
         }
-        untar(File(srcDir, "ext.tar.gz"), "/sdcard/Android/data/$pkg")
-        untar(File(srcDir, "media.tar.gz"), "/sdcard/Android/media/$pkg")
-        untar(File(srcDir, "obb.tar.gz"), "/sdcard/Android/obb/$pkg")
+        untar(File(srcDir, "ext.tar.gz"), "/sdcard/Android/data/$pkg", "external data", log)
+        untar(File(srcDir, "media.tar.gz"), "/sdcard/Android/media/$pkg", "media", log)
+        untar(File(srcDir, "obb.tar.gz"), "/sdcard/Android/obb/$pkg", "obb", log)
 
         if (restoreIdentity) {
             restoreKeystore(pkg, srcDir, uid?.first, log)
@@ -213,8 +221,10 @@ class AppData @Inject constructor() {
         }
     }
 
-    private suspend fun untar(tar: File, dest: String) {
+    private suspend fun untar(tar: File, dest: String, label: String, log: (String) -> Unit) {
         if (!tar.exists()) return
-        RootShell.exec("mkdir -p '$dest' ; (cd '$dest' && tar -xzf '${tar.absolutePath}' 2>/dev/null)")
+        RootShell.exec("mkdir -p '$dest' ; (cd '$dest' && (tar -xzf '${tar.absolutePath}' 2>/dev/null || tar -xf '${tar.absolutePath}' 2>/dev/null))")
+        val count = RootShell.exec("ls -A '$dest' 2>/dev/null | wc -l").out.firstOrNull()?.trim()
+        log("$label restored ($count entries)")
     }
 }

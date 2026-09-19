@@ -29,22 +29,51 @@ class Installer @Inject constructor(@ApplicationContext private val context: Con
         context.startActivity(intent)
     }
 
-    /** Silent batch install via root. Returns output for logging. */
-    suspend fun installBatchRoot(apks: List<File>, pkg: String): String {
-        if (!RootShell.isRooted()) return "root required for batch install"
+    /**
+     * Silent install via root. Verifies the result and falls back to the
+     * package-installer session API for split APKs. Returns true on success.
+     */
+    suspend fun installBatchRoot(apks: List<File>, pkg: String, log: (String) -> Unit): Boolean {
+        if (!RootShell.isRooted()) {
+            log("root required for batch install")
+            return false
+        }
         val tmp = "/data/local/tmp/fresh_$pkg"
         RootShell.exec("rm -rf $tmp && mkdir -p $tmp && chmod 777 $tmp")
         apks.forEach { apk ->
             RootShell.exec("cp -f '${apk.absolutePath}' '$tmp/${apk.name}' && chmod 644 '$tmp/${apk.name}'")
         }
-        val out = if (apks.size == 1) {
-            RootShell.exec("pm install -r -d -g '$tmp/${apks.first().name}'")
+        var ok = false
+        if (apks.size == 1) {
+            val r = RootShell.exec("pm install -r -d -g '$tmp/${apks.first().name}'")
+            log(r.out.joinToString("\n").ifBlank { "(no installer output)" })
+            ok = r.out.any { it.contains("Success", ignoreCase = true) }
         } else {
             val list = apks.joinToString(" ") { "'$tmp/${it.name}'" }
-            RootShell.exec("pm install-multiple -r -d -g $list")
+            val r = RootShell.exec("pm install-multiple -r -d -g $list")
+            log(r.out.joinToString("\n").ifBlank { "(no installer output)" })
+            ok = r.out.any { it.contains("Success", ignoreCase = true) }
+            if (!ok) {
+                log("install-multiple failed, trying installer session…")
+                val d = "$"
+                val r2 = RootShell.exec(
+                    "SID=${d}(pm install-create -r -d -g 2>/dev/null | grep -o '[0-9]*' | tail -n1) ; " +
+                        "if [ -n \"${d}SID\" ]; then for f in $tmp/*.apk; do SZ=${d}(stat -c%s \"${d}f\") ; " +
+                        "BN=${d}(basename \"${d}f\") ; pm install-write -S ${d}SZ ${d}SID \"${d}BN\" \"${d}f\" ; done ; " +
+                        "pm install-commit ${d}SID ; fi"
+                )
+                log(r2.out.joinToString("\n").ifBlank { "(no session output)" })
+                ok = r2.out.any { it.contains("Success", ignoreCase = true) }
+            }
         }
         RootShell.exec("rm -rf $tmp")
-        return out.out.joinToString("\n")
+        if (!ok) {
+            // Last word: does the package resolve now?
+            val v = RootShell.exec("pm path $pkg")
+            ok = v.isSuccess && v.out.any { it.contains("package:") }
+            log(if (ok) "verified installed via pm path" else "install FAILED for $pkg")
+        }
+        return ok
     }
 
     /** ACTION_SEND intent for sharing an APK with other apps. */

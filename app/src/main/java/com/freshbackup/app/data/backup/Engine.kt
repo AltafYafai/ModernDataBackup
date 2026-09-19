@@ -113,8 +113,11 @@ class Engine @Inject constructor(
                 val apks = apk.backedUpApks(dir)
                 if (opts.includeApk && apks.isNotEmpty()) {
                     if (rooted) {
-                        log("installing APK (root)…")
-                        log(installer.installBatchRoot(apks, pkg))
+                        log("installing ${apks.size} APK(s)…")
+                        val installed = installer.installBatchRoot(apks, pkg, log)
+                        if (!installed) {
+                            return@withContext Result.failure(Exception("APK install failed — see log above"))
+                        }
                     } else if (apks.size == 1) {
                         log("opening system installer…")
                         installer.installManual(apks.first())
@@ -123,6 +126,8 @@ class Engine @Inject constructor(
                         return@withContext Result.failure(Exception("split APKs need root for batch install"))
                     }
                     RootShell.forceStop(pkg)
+                } else if (opts.includeApk) {
+                    log("no APK in backup — installing nothing, restoring data only")
                 }
                 if (rooted && (opts.includeData || opts.includeDe || opts.includeExt || opts.includeMedia || opts.includeObb)) {
                     log("restoring data…")

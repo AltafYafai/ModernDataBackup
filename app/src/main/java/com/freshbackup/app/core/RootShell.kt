@@ -7,6 +7,50 @@ import kotlinx.coroutines.withContext
 /** Minimal root access layer on top of libsu. All calls must run on Dispatchers.IO. */
 object RootShell {
 
+    data class RootInfo(
+        val granted: Boolean = false,
+        val manager: String = "none",
+        val suPath: String = "",
+        val uid: String = "",
+        val selinux: String = "",
+        val detail: String = ""
+    )
+
+    /** Full root diagnosis for the status card + diagnostics screen. */
+    suspend fun details(): RootInfo = withContext(Dispatchers.IO) {
+        try {
+            val uidRes = Shell.cmd("id -u; echo ---; which su; echo ---; getenforce 2>/dev/null").exec()
+            val parts = uidRes.out.joinToString("\n").split("\n---\n")
+            val uid = (parts.getOrNull(0) ?: "").trim()
+            val suPath = (parts.getOrNull(1) ?: "").trim().lineSequence().firstOrNull()?.trim() ?: ""
+            val selinux = (parts.getOrNull(2) ?: "").trim().lineSequence().firstOrNull()?.trim() ?: ""
+            if (uid != "0") {
+                val hasSu = suPath.isNotEmpty()
+                return@withContext RootInfo(
+                    granted = false,
+                    suPath = suPath,
+                    uid = uid,
+                    selinux = selinux,
+                    detail = if (hasSu) "denied" else "no-su"
+                )
+            }
+            // We are root: identify the manager by its working directory.
+            val probe = Shell.cmd(
+                "for d in /data/adb/ap /data/adb/magisk /data/adb/ksu; do [ -d \"\$d\" ] && echo \$d; done"
+            ).exec()
+            val hits = probe.out.map { it.trim() }
+            val manager = when {
+                hits.any { it.endsWith("/ap") } -> "APatch"
+                hits.any { it.endsWith("/magisk") } -> "Magisk"
+                hits.any { it.endsWith("/ksu") } -> "KernelSU"
+                else -> "root (unknown manager)"
+            }
+            RootInfo(granted = true, manager = manager, suPath = suPath, uid = uid, selinux = selinux)
+        } catch (e: Exception) {
+            RootInfo(detail = "shell error: ${e.message}")
+        }
+    }
+
     @Volatile
     private var cached: Boolean? = null
 

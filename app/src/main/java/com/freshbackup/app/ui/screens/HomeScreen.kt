@@ -58,6 +58,7 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
     val rooted by vm.rooted.collectAsState()
     val job by vm.job.collectAsState()
     val perms by vm.perms.collectAsState()
+    val rootInfo by vm.rootInfo.collectAsState()
     val context = LocalContext.current
 
     val runtimeLauncher = rememberLauncherForActivityResult(
@@ -86,10 +87,11 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
             Column {
                 Text("Fresh Backup", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary)
                 Text(
-                    when (rooted) {
-                        true -> "Rooted · full protection on"
-                        false -> "Standard mode · APKs + device data"
-                        null -> "Checking device…"
+                    when {
+                        rootInfo?.granted == true -> "${rootInfo?.manager} · full protection on"
+                        rootInfo?.detail == "denied" -> "Root found but not granted"
+                        rooted == false -> "Standard mode · APKs + device data"
+                        else -> "Checking device…"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
@@ -98,6 +100,8 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Root status — always visible, with manager-specific guidance.
+            RootStatusCard(vm, rootInfo, rooted)
             // Setup blockers first — nothing can work until these are granted.
             if (!perms.allFiles || !perms.dirWritable) {
                 Card(
@@ -200,6 +204,53 @@ fun HomeScreen(vm: BackupViewModel, go: (String) -> Unit) {
                 }
             }
             Spacer(Modifier.height(90.dp))
+        }
+    }
+}
+
+@Composable
+private fun RootStatusCard(
+    vm: BackupViewModel,
+    info: com.freshbackup.app.core.RootShell.RootInfo?,
+    rooted: Boolean?
+) {
+    val context = LocalContext.current
+    val (title, body, tone) = when {
+        info?.granted == true -> Triple(
+            "Root: ${info.manager} ✓",
+            "su at ${info.suPath.ifEmpty { "?" }} · uid=${info.uid} · SELinux ${info.selinux.ifEmpty { "?" }}",
+            false
+        )
+        info?.detail == "denied" -> Triple(
+            "Root access denied",
+            "A su binary was found (${info.suPath.ifEmpty { "unknown path" }}) but this app is not allowed to use it. " +
+                "Open your root manager and allow Fresh Backup, then return here.",
+            true
+        )
+        info?.detail == "no-su" -> Triple(
+            "No root detected",
+            "APK + SMS/calls/wallpaper backup work. App-data backup needs Magisk, KernelSU or APatch.",
+            false
+        )
+        rooted == false -> Triple("No root detected", "APK + device-data backup available.", false)
+        else -> Triple("Checking root…", "Probing su access.", false)
+    }
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = if (tone) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(body, style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.refresh() }) { Text("Re-check") }
+                if (info?.detail == "denied" || info?.granted == true) {
+                    OutlinedButton(onClick = {
+                        vm.openManagerIntent()?.let { context.startActivity(it) }
+                    }) { Text("Open root manager") }
+                }
+            }
         }
     }
 }

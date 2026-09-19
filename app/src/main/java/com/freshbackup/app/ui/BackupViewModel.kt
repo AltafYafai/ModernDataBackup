@@ -92,6 +92,7 @@ class BackupViewModel @Inject constructor(
     val records = MutableStateFlow<List<BackupRecord>>(emptyList())
     val job = MutableStateFlow(JobState())
     val rooted = MutableStateFlow<Boolean?>(null)
+    val rootInfo = MutableStateFlow<RootShell.RootInfo?>(null)
     val backupDir = MutableStateFlow(Settings.DEFAULT_DIR)
     val keepVersions = MutableStateFlow(Settings.DEFAULT_KEEP)
     val schedEnabled = MutableStateFlow(false)
@@ -112,7 +113,9 @@ class BackupViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
-            rooted.value = RootShell.isRooted(true)
+            val info = RootShell.details()
+            rootInfo.value = info
+            rooted.value = info.granted
             try {
                 apps.value = apk.installed()
             } catch (e: Exception) { }
@@ -150,7 +153,11 @@ class BackupViewModel @Inject constructor(
     fun refreshDiagnostics() {
         viewModelScope.launch(Dispatchers.IO) {
             val lines = mutableListOf<String>()
+            val info = RootShell.details()
+            rootInfo.value = info
+            rooted.value = info.granted
             lines += RootShell.probe()
+            lines += "manager: ${info.manager} · su: ${info.suPath.ifEmpty { "none" }} · uid: ${info.uid.ifEmpty { "?" }} · SELinux: ${info.selinux.ifEmpty { "?" }}"
             val p = perms.value
             lines += "all-files access: ${if (p.allFiles) "YES" else "NO — required for /sdcard backups"}"
             lines += "backup dir writable: ${if (p.dirWritable) "YES (${backupDir.value})" else "NO (${backupDir.value})"}"
@@ -360,6 +367,27 @@ class BackupViewModel @Inject constructor(
     }
 
     fun hasAllFiles(): Boolean = Environment.isExternalStorageManager()
+
+    /** Deep-link into the installed root manager (APatch/Magisk/KernelSU), if any. */
+    fun openManagerIntent(): Intent? {
+        val pm = context.packageManager
+        val detected = rootInfo.value?.manager ?: ""
+        val ordered = when {
+            detected.startsWith("APatch") -> listOf("me.bmax.apatch")
+            detected.startsWith("Magisk") -> listOf("com.topjohnwu.magisk", "io.github.vvb2060.magisk")
+            detected.startsWith("KernelSU") -> listOf("me.weishu.kernelsu", "me.weishu.kernelsu.next")
+            else -> emptyList()
+        } + listOf("me.bmax.apatch", "com.topjohnwu.magisk", "io.github.vvb2060.magisk", "me.weishu.kernelsu", "me.weishu.kernelsu.next")
+        ordered.distinct().forEach { pkg ->
+            try {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(pkg, 0)
+                val launch = pm.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (launch != null) return launch
+            } catch (e: Exception) { }
+        }
+        return null
+    }
 
     fun allFilesIntent(): Intent = Intent(
         SystemSettings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
