@@ -41,12 +41,14 @@ class LocalBackend @Inject constructor() : StorageBackend {
         dst.parentFile?.mkdirs()
         if (local.isDirectory) local.copyRecursively(dst, overwrite = true)
         else local.copyTo(dst, overwrite = true)
+        Unit
     }
 
     override suspend fun download(remotePath: String, local: File) = withContext(Dispatchers.IO) {
         val src = File(root, remotePath)
         if (src.isDirectory) src.copyRecursively(local, overwrite = true)
         else src.copyTo(local, overwrite = true)
+        Unit
     }
 
     override suspend fun list(remotePath: String): List<String> = withContext(Dispatchers.IO) {
@@ -93,6 +95,7 @@ class WebDavBackend(
             check(resp.isSuccessful) { "download failed: ${resp.code}" }
             local.parentFile?.mkdirs()
             local.outputStream().use { out -> resp.body!!.byteStream().copyTo(out) }
+            Unit
         }
     }
 

@@ -56,9 +56,9 @@ fun CloudScreen(vm: BackupViewModel, local: LocalBackend) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("WebDAV (Nextcloud / NAS)", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(url, { url = it }, { Text("https://…/remote.php/dav/files/user/") }, Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(user, { user = it }, { Text("Username") }, Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(pass, { pass = it }, { Text("Password / app token") }, Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("https://…/remote.php/dav/files/user/") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = pass, onValueChange = { pass = it }, label = { Text("Password / app token") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedButton(onClick = {
                     scope.launch {
                         result = "testing…"
@@ -91,14 +91,14 @@ fun SettingsScreen(vm: BackupViewModel) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Backup location", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(dirText, { dirText = it }, { Text("/sdcard/FreshBackup") }, Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = dirText, onValueChange = { dirText = it }, label = { Text("/sdcard/FreshBackup") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Versions & encryption", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(keepText, { keepText = it.filter { c -> c.isDigit() }.take(2) }, { Text("Keep versions (1–20)") }, Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(passText, { passText = it }, { Text("Extra passphrase (optional)") }, Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = keepText, onValueChange = { keepText = it.filter { c -> c.isDigit() }.take(2) }, label = { Text("Keep versions (1–20)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = passText, onValueChange = { passText = it }, label = { Text("Extra passphrase (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Button(onClick = { vm.saveSettings(dirText, keepText.toIntOrNull() ?: 3, passText) }) {
                     Text("Save")
                 }

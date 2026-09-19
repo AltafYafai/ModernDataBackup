@@ -34,10 +34,10 @@ fun DeviceScreen(vm: BackupViewModel, onOpenCloud: () -> Unit) {
             Text(job.status, style = MaterialTheme.typography.bodySmall)
             LinearProgressIndicator(progress = job.progress, modifier = Modifier.fillMaxWidth())
         }
-        MediumRow("Messages", "Back up & restore SMS")({ vm.backupMedium("sms") }, { vm.restoreMedium("sms") })
-        MediumRow("Call log", "Back up & restore calls")({ vm.backupMedium("calls") }, { vm.restoreMedium("calls") })
-        MediumRow("Wallpaper", "Back up & re-apply")({ vm.backupMedium("wallpaper") }, { vm.restoreMedium("wallpaper") })
-        MediumRow("WiFi networks", "Root required")({ vm.backupMedium("wifi") }, { vm.restoreMedium("wifi") })
+        MediumRow("Messages", "Back up & restore SMS", { vm.backupMedium("sms") }, { vm.restoreMedium("sms") })
+        MediumRow("Call log", "Back up & restore calls", { vm.backupMedium("calls") }, { vm.restoreMedium("calls") })
+        MediumRow("Wallpaper", "Back up & re-apply", { vm.backupMedium("wallpaper") }, { vm.restoreMedium("wallpaper") })
+        MediumRow("WiFi networks", "Root required", { vm.backupMedium("wifi") }, { vm.restoreMedium("wifi") })
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Cloud & folders", style = MaterialTheme.typography.titleMedium)
