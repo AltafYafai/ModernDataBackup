@@ -110,8 +110,8 @@ private fun ScheduleEditor(vm: BackupViewModel, initial: Schedule, onClose: () -
         title = { Text(if (initial.id == 0L) "New schedule" else "Edit schedule") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, { Text("Name") }, Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(hours, { hours = it.filter { c -> c.isDigit() }.take(3) }, { Text("Every N hours") }, Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = hours, onValueChange = { hours = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("Every N hours") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Charging only", Modifier.weight(1f))
                     Switch(charging, { charging = it })
