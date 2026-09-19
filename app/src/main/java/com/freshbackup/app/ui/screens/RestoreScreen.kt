@@ -109,27 +109,3 @@ private fun VersionCard(rec: BackupRecord, onRestore: () -> Unit, onDelete: () -
         }
     }
 }
-
-@Composable
-fun ScheduleScreen(vm: BackupViewModel) {
-    val enabled by vm.schedEnabled.collectAsState()
-    val hours by vm.schedHours.collectAsState()
-    var localHours by remember(hours) { mutableStateOf(hours.toString()) }
-
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Schedules", style = MaterialTheme.typography.headlineSmall)
-        Text("Recurring device backups of all user apps.", style = MaterialTheme.typography.bodyMedium)
-        OutlinedButton(onClick = { vm.applySchedule(!enabled, localHours.toIntOrNull() ?: 24) }) {
-            Text(if (enabled) "Disable schedule" else "Enable schedule")
-        }
-        androidx.compose.material3.OutlinedTextField(
-            value = localHours,
-            onValueChange = { localHours = it.filter { c -> c.isDigit() }.take(3) },
-            label = { Text("Every N hours (1–168)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedButton(onClick = { vm.applySchedule(true, localHours.toIntOrNull() ?: 24) }) {
-            Text("Save interval")
-        }
-    }
-}

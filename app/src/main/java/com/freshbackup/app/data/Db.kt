@@ -44,6 +44,9 @@ interface BackupDao {
     @Query("SELECT DISTINCT packageName FROM backups")
     suspend fun backedUpPackages(): List<String>
 
+    @Query("SELECT SUM(totalBytes) FROM backups WHERE timestamp = (SELECT MAX(timestamp) FROM backups b2 WHERE b2.packageName = backups.packageName)")
+    suspend fun latestTotalBytes(): Long?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: BackupRecord)
 
@@ -60,7 +63,74 @@ interface BackupDao {
     suspend fun prune(pkg: String, keep: Int)
 }
 
-@Database(entities = [BackupRecord::class], version = 1, exportSchema = false)
+/** Per-app custom backup/restore config + labels (Swift "custom configuration"). */
+@Entity(tableName = "appconfig", primaryKeys = ["packageName"])
+data class AppConfig(
+    val packageName: String,
+    val labels: String = "",
+    val includeApk: Boolean = true,
+    val includeData: Boolean = true,
+    val includeDe: Boolean = true,
+    val includeExt: Boolean = true,
+    val includeMedia: Boolean = true,
+    val includeObb: Boolean = true,
+    val includeIdentity: Boolean = true
+)
+
+@Dao
+interface AppConfigDao {
+    @Query("SELECT * FROM appconfig WHERE packageName = :pkg LIMIT 1")
+    suspend fun get(pkg: String): AppConfig?
+
+    @Query("SELECT * FROM appconfig")
+    suspend fun all(): List<AppConfig>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(config: AppConfig)
+
+    @Query("DELETE FROM appconfig WHERE packageName = :pkg")
+    suspend fun clear(pkg: String)
+}
+
+/** Recurring backup schedules, each with its own app set and cloud target. */
+@Entity(tableName = "schedules")
+data class Schedule(
+    @androidx.room.PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String = "",
+    val packagesCsv: String = "",
+    val intervalHours: Int = 24,
+    val chargingOnly: Boolean = true,
+    val cloudBackend: String = "",
+    val enabled: Boolean = true,
+    val lastRun: Long = 0
+) {
+    fun packages(): List<String> = packagesCsv.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+}
+
+@Dao
+interface ScheduleDao {
+    @Query("SELECT * FROM schedules ORDER BY id")
+    suspend fun all(): List<Schedule>
+
+    @Query("SELECT * FROM schedules WHERE id = :id LIMIT 1")
+    suspend fun get(id: Long): Schedule?
+
+    @Query("SELECT * FROM schedules WHERE enabled = 1")
+    suspend fun enabled(): List<Schedule>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(schedule: Schedule): Long
+
+    @Query("DELETE FROM schedules WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("UPDATE schedules SET lastRun = :ts WHERE id = :id")
+    suspend fun markRun(id: Long, ts: Long)
+}
+
+@Database(entities = [BackupRecord::class, AppConfig::class, Schedule::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun backups(): BackupDao
+    abstract fun configs(): AppConfigDao
+    abstract fun schedules(): ScheduleDao
 }

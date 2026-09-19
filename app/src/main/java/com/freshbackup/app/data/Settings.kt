@@ -26,6 +26,24 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
         val KEEP = intPreferencesKey("keep_versions")
         val SCHED_ENABLED = booleanPreferencesKey("sched_enabled")
         val SCHED_HOURS = intPreferencesKey("sched_hours")
+        val CLOUD_ACTIVE = stringPreferencesKey("cloud_active")
+    }
+
+    private fun cloudKey(id: String) = stringPreferencesKey("cloud_$id")
+
+    /** Raw JSON config per backend id (webdav/s3/ftp/sftp/smb). */
+    suspend fun cloudConfig(id: String): String =
+        context.prefs.data.map { it[cloudKey(id)] ?: "" }.first()
+
+    suspend fun setCloudConfig(id: String, json: String) {
+        context.prefs.edit { it[cloudKey(id)] = json }
+    }
+
+    suspend fun activeBackend(): String =
+        context.prefs.data.map { it[Keys.CLOUD_ACTIVE] ?: "local" }.first()
+
+    suspend fun setActiveBackend(id: String) {
+        context.prefs.edit { it[Keys.CLOUD_ACTIVE] = id }
     }
 
     companion object {

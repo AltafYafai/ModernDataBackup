@@ -14,8 +14,8 @@ android {
         applicationId = "com.freshbackup.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -65,4 +65,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.libsu.core)
     implementation(libs.libsu.service)
+    implementation(libs.commons.net)
+    implementation(libs.sshj)
+    implementation(libs.smbj)
 }

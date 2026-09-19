@@ -38,4 +38,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideBackupDao(db: AppDb) = db.backups()
+
+    @Provides
+    @Singleton
+    fun provideConfigDao(db: AppDb) = db.configs()
+
+    @Provides
+    @Singleton
+    fun provideScheduleDao(db: AppDb) = db.schedules()
 }

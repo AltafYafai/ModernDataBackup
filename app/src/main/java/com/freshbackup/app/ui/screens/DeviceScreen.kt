@@ -15,10 +15,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.freshbackup.app.ui.BackupViewModel
@@ -38,10 +42,11 @@ fun DeviceScreen(vm: BackupViewModel, onOpenCloud: () -> Unit) {
         MediumRow("Call log", "Back up & restore calls", { vm.backupMedium("calls") }, { vm.restoreMedium("calls") })
         MediumRow("Wallpaper", "Back up & re-apply", { vm.backupMedium("wallpaper") }, { vm.restoreMedium("wallpaper") })
         MediumRow("WiFi networks", "Root required", { vm.backupMedium("wifi") }, { vm.restoreMedium("wifi") })
+        FolderCard(vm)
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Cloud & folders", style = MaterialTheme.typography.titleMedium)
-                Text("WebDAV upload and incremental folder backup live here next.", style = MaterialTheme.typography.bodySmall)
+                Text("Cloud sync", style = MaterialTheme.typography.titleMedium)
+                Text("Upload this device's backups to any configured target.", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = onOpenCloud) { Text("Open cloud") }
             }
         }
@@ -50,6 +55,33 @@ fun DeviceScreen(vm: BackupViewModel, onOpenCloud: () -> Unit) {
             job.log.takeLast(30).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
         Spacer(Modifier.height(80.dp))
+    }
+}
+
+@Composable
+private fun FolderCard(vm: BackupViewModel) {
+    var custom by remember { mutableStateOf("") }
+    val presets = listOf("/sdcard/DCIM", "/sdcard/Download", "/sdcard/Documents", "/sdcard/WhatsApp/Media")
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Folders (incremental)", style = MaterialTheme.typography.titleMedium)
+            Text("Only changed files are copied on each run.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.backupFolders(presets) }, modifier = Modifier.weight(1f)) {
+                    Text("Back up presets")
+                }
+            }
+            OutlinedTextField(
+                value = custom,
+                onValueChange = { custom = it },
+                label = { Text("/sdcard/… custom path") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedButton(onClick = { if (custom.isNotBlank()) vm.backupFolders(listOf(custom.trim())) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Back up custom folder")
+            }
+        }
     }
 }
 

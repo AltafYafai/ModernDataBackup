@@ -63,7 +63,7 @@ class Engine @Inject constructor(
             var dataBytes = 0L
             if ((opts.includeData || opts.includeDe || opts.includeExt || opts.includeMedia || opts.includeObb) && rooted) {
                 log("backing up data…")
-                dataBytes = appData.backup(pkg, dir, opts.includeData, opts.includeDe, opts.includeExt, opts.includeMedia, opts.includeObb) { log(it) }.values.sum()
+                dataBytes = appData.backup(pkg, dir, opts.includeData, opts.includeDe, opts.includeExt, opts.includeMedia, opts.includeObb, opts.includeIdentity) { log(it) }.values.sum()
             } else if (!rooted) {
                 log("no root: app data skipped")
             }

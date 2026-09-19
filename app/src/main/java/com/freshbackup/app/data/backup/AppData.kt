@@ -23,6 +23,7 @@ class AppData @Inject constructor() {
         includeExt: Boolean,
         includeMedia: Boolean,
         includeObb: Boolean,
+        includeIdentity: Boolean,
         log: (String) -> Unit
     ): Map<String, Long> = withContext(Dispatchers.IO) {
         val sizes = mutableMapOf<String, Long>()
@@ -58,8 +59,13 @@ class AppData @Inject constructor() {
         tarDir("/sdcard/Android/media/$pkg", File(destDir, "media.tar.gz"), "media", sizes, log)
         tarDir("/sdcard/Android/obb/$pkg", File(destDir, "obb.tar.gz"), "obb", sizes, log)
 
-        // SSAID identity + granted permissions for faithful restore.
-        if (includeExt || includeData) {
+        // SSAID identity + granted permissions + keystore for faithful restore.
+        if (includeIdentity && (includeExt || includeData)) {
+            val uid = RootShell.appUid(pkg)?.first
+            if (uid != null) {
+                File(destDir, "uid.txt").writeText(uid.toString())
+                backupKeystore(uid, destDir, log)
+            }
             val ssaid = RootShell.exec(
                 "grep -B 1 '$pkg' /data/system/users/0/settings_ssaid.xml 2>/dev/null | grep 'value=' | sed 's/.*value=\"//;s/\".*//'"
             ).out.firstOrNull()?.trim()
@@ -76,6 +82,43 @@ class AppData @Inject constructor() {
             }
         }
         sizes
+    }
+
+    /** AndroidKeyStore keys live under the app UID; archive them for relogin-free restore. */
+    private suspend fun backupKeystore(uid: Int, destDir: File, log: (String) -> Unit) {
+        val dest = File(destDir, "keystore.tar.gz")
+        dest.delete()
+        val d = "$"
+        RootShell.exec(
+            "if [ -d /data/misc/keystore/user_0 ]; then " +
+                "KS=${d}(ls /data/misc/keystore/user_0 2>/dev/null | grep '^${uid}_') ; " +
+                "if [ -n \"${d}KS\" ]; then (cd /data/misc/keystore/user_0 && tar -czf '${dest.absolutePath}' ${d}KS 2>/dev/null) ; " +
+                "chmod 644 '${dest.absolutePath}' ; fi ; fi"
+        )
+        if (dest.exists()) {
+            log("keystore: ${dest.length() / 1024} KB")
+        }
+    }
+
+    private suspend fun restoreKeystore(pkg: String, srcDir: File, newUid: Int?, log: (String) -> Unit) {
+        val tar = File(srcDir, "keystore.tar.gz")
+        if (!tar.exists()) return
+        val oldUid = try {
+            File(srcDir, "uid.txt").readText().trim()
+        } catch (e: Exception) {
+            ""
+        }
+        val target = newUid?.toString() ?: return
+        val d = "$"
+        RootShell.exec(
+            "mkdir -p /data/misc/keystore/user_0 ; " +
+                "tar -xzf '${tar.absolutePath}' -C /data/misc/keystore/user_0 2>/dev/null ; " +
+                "if [ -n \"$oldUid\" ] && [ \"$oldUid\" != \"$target\" ]; then " +
+                "for f in /data/misc/keystore/user_0/${oldUid}_*; do " +
+                "if [ -f \"${d}f\" ]; then N=${d}(echo \"${d}f\" | sed \"s/${oldUid}_/${target}_/\") ; mv \"${d}f\" \"${d}N\" 2>/dev/null ; fi ; done ; fi ; " +
+                "chown -R keystore:keystore /data/misc/keystore/user_0 2>/dev/null"
+        )
+        log("keystore restored")
     }
 
     suspend fun restore(
@@ -126,6 +169,10 @@ class AppData @Inject constructor() {
         untar(File(srcDir, "ext.tar.gz"), "/sdcard/Android/data/$pkg")
         untar(File(srcDir, "media.tar.gz"), "/sdcard/Android/media/$pkg")
         untar(File(srcDir, "obb.tar.gz"), "/sdcard/Android/obb/$pkg")
+
+        if (restoreIdentity) {
+            restoreKeystore(pkg, srcDir, uid?.first, log)
+        }
 
         if (restoreIdentity) {
             val ssaidFile = File(srcDir, "ssaid.txt")

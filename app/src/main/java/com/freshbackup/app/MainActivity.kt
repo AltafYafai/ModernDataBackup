@@ -32,8 +32,9 @@ import com.freshbackup.app.ui.FreshTheme
 import com.freshbackup.app.ui.screens.AppsScreen
 import com.freshbackup.app.ui.screens.CloudScreen
 import com.freshbackup.app.ui.screens.DeviceScreen
+import com.freshbackup.app.ui.screens.HomeScreen
 import com.freshbackup.app.ui.screens.RestoreScreen
-import com.freshbackup.app.ui.screens.ScheduleScreen
+import com.freshbackup.app.ui.screens.SchedulesScreen
 import com.freshbackup.app.ui.screens.SettingsScreen
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -63,11 +64,10 @@ private fun FreshNav(localBackend: LocalBackend) {
     val nav = rememberNavController()
     val vm: BackupViewModel = hiltViewModel()
     val tabs = listOf(
-        Tab("apps", "Apps") { Icon(Icons.Filled.Home, null) },
+        Tab("home", "Home") { Icon(Icons.Filled.Home, null) },
+        Tab("apps", "Apps") { Icon(Icons.Filled.PhoneAndroid, null) },
         Tab("restore", "Restore") { Icon(Icons.Filled.Restore, null) },
-        Tab("device", "Device") { Icon(Icons.Filled.PhoneAndroid, null) },
         Tab("cloud", "Cloud") { Icon(Icons.Filled.Cloud, null) },
-        Tab("schedule", "Schedule") { Icon(Icons.Filled.Schedule, null) },
         Tab("settings", "Settings") { Icon(Icons.Filled.Settings, null) }
     )
     Scaffold(
@@ -86,12 +86,13 @@ private fun FreshNav(localBackend: LocalBackend) {
             }
         }
     ) { padding ->
-        NavHost(nav, startDestination = "apps", modifier = Modifier.padding(padding)) {
+        NavHost(nav, startDestination = "home", modifier = Modifier.padding(padding)) {
+            composable("home") { HomeScreen(vm, go = { nav.navigate(it) { launchSingleTop = true } }) }
             composable("apps") { AppsScreen(vm) }
             composable("restore") { RestoreScreen(vm) }
             composable("device") { DeviceScreen(vm, onOpenCloud = { nav.navigate("cloud") }) }
             composable("cloud") { CloudScreen(vm, localBackend) }
-            composable("schedule") { ScheduleScreen(vm) }
+            composable("schedules") { SchedulesScreen(vm) }
             composable("settings") { SettingsScreen(vm) }
         }
     }
