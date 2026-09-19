@@ -68,4 +68,8 @@ dependencies {
     implementation(libs.commons.net)
     implementation(libs.sshj)
     implementation(libs.smbj)
+    // Align BouncyCastle across sshj/smbj transitives (avoids duplicate classes)
+    implementation(libs.bcprov)
+    implementation(libs.bcpkix)
+    implementation(libs.bcutil)
 }
